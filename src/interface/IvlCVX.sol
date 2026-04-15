@@ -34,7 +34,7 @@ interface IvlCVX {
 
     /* ========== STATE VARIABLES ========== */
 
-    function stakingToken() external view returns (IERC20);
+    function stakingToken() external view returns (address);
     function cvxCrv() external view returns (address);
     function rewardTokens(uint256 index) external view returns (address);
     function rewardsDuration() external view returns (uint256);
