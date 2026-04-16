@@ -18,6 +18,7 @@ contract DelegationTest is Test {
     address internal delegateC = makeAddr("delegateC");
 
     uint256 constant WEEK = 86400 * 7;
+    uint256 constant WEIGHT_DIVISOR = 1e17;
 
     function setUp() public {
         vm.warp(52 weeks * 2);
@@ -43,8 +44,28 @@ contract DelegationTest is Test {
         return mockVlCVX.findEpochId(block.timestamp);
     }
 
+    function assertWeightMatches(uint256 epoch, address delegateAddress, uint256 expected) internal {
+        uint256 actual = delegation.balanceAtEpochOf(epoch, delegateAddress);
+        uint256 tolerance = WEIGHT_DIVISOR;
+        if (actual > expected) {
+            assertLe(actual - expected, tolerance, string(abi.encodePacked("delegate weight mismatch epoch ", vm.toString(epoch))));
+        } else {
+            assertLe(expected - actual, tolerance, string(abi.encodePacked("delegate weight mismatch epoch ", vm.toString(epoch))));
+        }
+    }
+
+    function assertUserWeightMatches(uint256 epoch, address user, uint256 expected) internal {
+        uint256 actual = delegation.userWeightAtEpochOf(epoch, user);
+        uint256 tolerance = WEIGHT_DIVISOR;
+        if (actual > expected) {
+            assertLe(actual - expected, tolerance, string(abi.encodePacked("user weight mismatch epoch ", vm.toString(epoch))));
+        } else {
+            assertLe(expected - actual, tolerance, string(abi.encodePacked("user weight mismatch epoch ", vm.toString(epoch))));
+        }
+    }
+
     function test_setDelegateAndSync() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -57,13 +78,13 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_syncOnlyWritesFutureEpochs() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
         warpToNextEpoch();
 
         uint256 current = currentEpochIndex();
@@ -71,12 +92,12 @@ contract DelegationTest is Test {
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
-        assertEq(delegation.userEpochWeights(alice, current), 0);
-        assertEq(delegation.delegateEpochWeights(delegateA, current), 0);
+        assertEq(delegation.getUserWeight(alice), 0);
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 0);
     }
 
     function test_syncUpdatesFutureEpochs() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -86,15 +107,15 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_multipleDelegates() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
-        mockVlCVX.mockLock(bob, 2000, 2000);
-        mockVlCVX.mockLock(carol, 3000, 3000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(bob, 2000 * WEIGHT_DIVISOR, 2000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(carol, 3000 * WEIGHT_DIVISOR, 3000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -109,19 +130,15 @@ contract DelegationTest is Test {
         uint256 endEpoch = nextEpoch + 2;
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
-            assertEq(
-                delegation.delegateEpochWeights(delegateA, i),
-                mockVlCVX.balanceAtEpochOf(i, alice) + mockVlCVX.balanceAtEpochOf(i, carol)
-            );
-            assertEq(
-                delegation.delegateEpochWeights(delegateB, i),
-                mockVlCVX.balanceAtEpochOf(i, bob)
-            );
+            uint256 expectedA = mockVlCVX.balanceAtEpochOf(i, alice) + mockVlCVX.balanceAtEpochOf(i, carol);
+            uint256 expectedB = mockVlCVX.balanceAtEpochOf(i, bob);
+            assertWeightMatches(i, delegateA, expectedA);
+            assertWeightMatches(i, delegateB, expectedB);
         }
     }
 
     function test_swapDelegateMigratesWeights() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -134,8 +151,9 @@ contract DelegationTest is Test {
         uint256 newNextEpoch = nextEpochIndex();
 
         for (uint256 i = newNextEpoch; i < syncedUpTo && i < newNextEpoch + 16; i++) {
-            assertEq(delegation.delegateEpochWeights(delegateA, i), 0, "delegateA should be zero");
-            assertEq(delegation.delegateEpochWeights(delegateB, i), mockVlCVX.balanceAtEpochOf(i, alice), "delegateB weight mismatch");
+            uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
+            assertWeightMatches(i, delegateA, 0);
+            assertWeightMatches(i, delegateB, expected);
         }
 
         assertEq(delegation.delegates(alice), delegateB);
@@ -143,7 +161,7 @@ contract DelegationTest is Test {
     }
 
     function test_swapDelegateRemovesOldWeights() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -156,19 +174,19 @@ contract DelegationTest is Test {
         uint256 newNextEpoch = nextEpochIndex();
 
         for (uint256 i = newNextEpoch; i < syncedUpTo; i++) {
-            assertEq(delegation.delegateEpochWeights(delegateA, i), 0);
+            assertWeightMatches(i, delegateA, 0);
         }
     }
 
     function test_additionalLockThenSync() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 500, 500);
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -177,19 +195,19 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_relockReducesFutureWeight() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         warpWeeks(17);
-        mockVlCVX.mockRelock(alice, 0, 800);
+        mockVlCVX.mockRelock(alice, 0, 800 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -198,13 +216,13 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_expireLocksThenSync() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -220,12 +238,12 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
+            assertUserWeightMatches(i, alice, expected);
         }
     }
 
     function test_syncAfterAllLocksExpired() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -240,20 +258,20 @@ contract DelegationTest is Test {
         uint256 endEpoch = nextEpoch + 2;
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
-            assertEq(delegation.userEpochWeights(alice, i), 0);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), 0);
+            assertUserWeightMatches(i, alice, 0);
+            assertWeightMatches(i, delegateA, 0);
         }
     }
 
     function test_syncReducesWeightWhenPartialExpiry() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 500, 500);
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -268,25 +286,25 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_balanceAtEpochOf() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         uint256 nextEpoch = nextEpochIndex();
 
-        assertEq(delegation.balanceAtEpochOf(nextEpoch, delegateA), 1000);
-        assertEq(delegation.balanceAtEpochOf(nextEpoch + 5, delegateA), 1000);
+        assertWeightMatches(nextEpoch, delegateA, 1000 * WEIGHT_DIVISOR);
+        assertWeightMatches(nextEpoch + 5, delegateA, 1000 * WEIGHT_DIVISOR);
     }
 
     function test_setDelegateToZeroRemovesWeights() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -300,7 +318,7 @@ contract DelegationTest is Test {
 
         uint256 newNextEpoch = nextEpochIndex();
         for (uint256 i = newNextEpoch; i < syncedUpTo; i++) {
-            assertEq(delegation.delegateEpochWeights(delegateA, i), 0);
+            assertWeightMatches(i, delegateA, 0);
         }
     }
 
@@ -310,7 +328,7 @@ contract DelegationTest is Test {
     }
 
     function test_swapDelegateMultipleTimes() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -326,20 +344,20 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateB, i), 0);
+            assertWeightMatches(i, delegateA, expected);
+            assertWeightMatches(i, delegateB, 0);
         }
     }
 
     function test_syncAfterMidEpochWarp() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         warpWeeks(3);
 
-        mockVlCVX.mockLock(alice, 500, 500);
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -348,15 +366,15 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_multipleUsersSameDelegate() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
-        mockVlCVX.mockLock(bob, 2000, 2000);
-        mockVlCVX.mockLock(carol, 3000, 3000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(bob, 2000 * WEIGHT_DIVISOR, 2000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(carol, 3000 * WEIGHT_DIVISOR, 3000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -374,13 +392,13 @@ contract DelegationTest is Test {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice)
                 + mockVlCVX.balanceAtEpochOf(i, bob)
                 + mockVlCVX.balanceAtEpochOf(i, carol);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_userLeavesDelegateThenNewUserJoins() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
-        mockVlCVX.mockLock(bob, 2000, 2000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(bob, 2000 * WEIGHT_DIVISOR, 2000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -395,15 +413,15 @@ contract DelegationTest is Test {
         uint256 endEpoch = nextEpoch + 2;
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
-            assertEq(delegation.delegateEpochWeights(delegateA, i), mockVlCVX.balanceAtEpochOf(i, bob));
-            assertEq(delegation.delegateEpochWeights(delegateB, i), mockVlCVX.balanceAtEpochOf(i, alice));
+            assertWeightMatches(i, delegateA, mockVlCVX.balanceAtEpochOf(i, bob));
+            assertWeightMatches(i, delegateB, mockVlCVX.balanceAtEpochOf(i, alice));
         }
     }
 
     function test_totalDelegatedMatchesTotalVlCVX() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
-        mockVlCVX.mockLock(bob, 2000, 2000);
-        mockVlCVX.mockLock(carol, 500, 500);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(bob, 2000 * WEIGHT_DIVISOR, 2000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(carol, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -418,40 +436,43 @@ contract DelegationTest is Test {
         uint256 endEpoch = nextEpoch + 2;
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
-            uint256 totalA = delegation.delegateEpochWeights(delegateA, i);
-            uint256 totalB = delegation.delegateEpochWeights(delegateB, i);
+            uint256 totalA = delegation.balanceAtEpochOf(i, delegateA);
+            uint256 totalB = delegation.balanceAtEpochOf(i, delegateB);
 
-            assertEq(totalA, mockVlCVX.balanceAtEpochOf(i, alice) + mockVlCVX.balanceAtEpochOf(i, bob));
-            assertEq(totalB, mockVlCVX.balanceAtEpochOf(i, carol));
+            uint256 expectedA = mockVlCVX.balanceAtEpochOf(i, alice) + mockVlCVX.balanceAtEpochOf(i, bob);
+            uint256 expectedB = mockVlCVX.balanceAtEpochOf(i, carol);
+            uint256 totalExpected = expectedA + expectedB;
 
             uint256 totalDelegated = totalA + totalB;
-            uint256 totalWeight = mockVlCVX.balanceAtEpochOf(i, alice)
-                + mockVlCVX.balanceAtEpochOf(i, bob)
-                + mockVlCVX.balanceAtEpochOf(i, carol);
-            assertEq(totalDelegated, totalWeight);
+            uint256 tolerance = WEIGHT_DIVISOR * 2;
+            if (totalDelegated > totalExpected) {
+                assertLe(totalDelegated - totalExpected, tolerance);
+            } else {
+                assertLe(totalExpected - totalDelegated, tolerance);
+            }
         }
     }
 
-    function test_epochCount() public {
+    function test_epochCount() public view {
         uint256 count = delegation.epochCount();
         assertGt(count, 0);
     }
 
     function test_multipleLocksDifferentEpochs() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 500, 500);
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 300, 300);
+        mockVlCVX.mockLock(alice, 300 * WEIGHT_DIVISOR, 300 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -460,14 +481,14 @@ contract DelegationTest is Test {
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 expected = mockVlCVX.balanceAtEpochOf(i, alice);
-            assertEq(delegation.userEpochWeights(alice, i), expected);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), expected);
+            assertUserWeightMatches(i, alice, expected);
+            assertWeightMatches(i, delegateA, expected);
         }
     }
 
     function test_partialDelegateSwapMidEpoch() public {
-        mockVlCVX.mockLock(alice, 1000, 1000);
-        mockVlCVX.mockLock(bob, 2000, 2000);
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+        mockVlCVX.mockLock(bob, 2000 * WEIGHT_DIVISOR, 2000 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateA);
@@ -477,7 +498,7 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 500, 500);
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         vm.prank(alice);
         delegation.setDelegate(delegateB);
@@ -488,8 +509,8 @@ contract DelegationTest is Test {
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
             uint256 aliceWeight = mockVlCVX.balanceAtEpochOf(i, alice);
             uint256 bobWeight = mockVlCVX.balanceAtEpochOf(i, bob);
-            assertEq(delegation.delegateEpochWeights(delegateA, i), bobWeight);
-            assertEq(delegation.delegateEpochWeights(delegateB, i), aliceWeight);
+            assertWeightMatches(i, delegateA, bobWeight);
+            assertWeightMatches(i, delegateB, aliceWeight);
         }
     }
 }
