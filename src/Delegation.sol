@@ -20,7 +20,12 @@ contract Delegation {
         uint32 w7;
     }
 
-    mapping(address => address) public delegates;
+    struct SetDelegateRecord {
+        address delegate;
+        uint32 startingEpoch;
+    }
+
+    mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public delegateEpochWeights;
     mapping(address => uint256) public syncedUserEpoch;
@@ -30,13 +35,35 @@ contract Delegation {
     }
 
     function setDelegate(address _delegate) external {
-        address oldDelegate = delegates[msg.sender];
+        vlCVX.checkpointEpoch();
+        uint256 nextEpoch = vlCVX.epochCount() - 1;
+
+        SetDelegateRecord[] storage history = delegateHistory[msg.sender];
+        address oldDelegate;
+        uint256 len = history.length;
+
+        if (len == 0) {
+            history.push(SetDelegateRecord({
+                delegate: _delegate,
+                startingEpoch: uint32(nextEpoch)
+            }));
+        } else {
+            SetDelegateRecord storage tail = history[len - 1];
+            oldDelegate = tail.delegate;
+
+            if (tail.startingEpoch == uint32(nextEpoch)) {
+                tail.delegate = _delegate;
+            } else {
+                history.push(SetDelegateRecord({
+                    delegate: _delegate,
+                    startingEpoch: uint32(nextEpoch)
+                }));
+            }
+        }
 
         if (oldDelegate != address(0) && oldDelegate != _delegate) {
             _removeUser(msg.sender, oldDelegate);
         }
-
-        delegates[msg.sender] = _delegate;
 
         if (_delegate != address(0)) {
             _sync(msg.sender);
@@ -46,8 +73,21 @@ contract Delegation {
     }
 
     function sync(address _user) external {
-        require(delegates[_user] != address(0), "No delegate");
+        vlCVX.checkpointEpoch();
+        SetDelegateRecord[] storage history = delegateHistory[_user];
+        require(history.length > 0, "No delegate");
+        require(history[history.length - 1].delegate != address(0), "No delegate");
         _sync(_user);
+    }
+
+    function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
+        SetDelegateRecord[] storage history = delegateHistory[_user];
+        for (uint256 i = history.length; i > 0; i--) {
+            if (history[i - 1].startingEpoch <= _epoch) {
+                return history[i - 1].delegate;
+            }
+        }
+        return address(0);
     }
 
     function _getEntryIndex(uint256 epoch) internal pure returns (uint256) {
@@ -85,10 +125,9 @@ contract Delegation {
     }
 
     function _sync(address _user) internal {
-        vlCVX.checkpointEpoch();
         uint256 nextEpoch = vlCVX.epochCount() - 1;
         uint256 endEpoch = nextEpoch + FILL_EPOCHS;
-        address delegate = delegates[_user];
+        address delegate = delegateHistory[_user][delegateHistory[_user].length - 1].delegate;
 
         uint256 startEntry = _getEntryIndex(nextEpoch);
         uint256 endEntry = _getEntryIndex(endEpoch - 1);
@@ -128,7 +167,6 @@ contract Delegation {
     }
 
     function _removeUser(address _user, address _delegate) internal {
-        vlCVX.checkpointEpoch();
         uint256 nextEpoch = vlCVX.epochCount() - 1;
         uint256 endEpoch = syncedUserEpoch[_user];
 

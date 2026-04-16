@@ -73,7 +73,7 @@ contract DelegationTest is Test {
         uint256 nextEpoch = nextEpochIndex();
         uint256 endEpoch = nextEpoch + 16;
 
-        assertEq(delegation.delegates(alice), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), delegateA);
         assertEq(delegation.syncedUserEpoch(alice), endEpoch);
 
         for (uint256 i = nextEpoch; i < endEpoch; i++) {
@@ -156,7 +156,7 @@ contract DelegationTest is Test {
             assertWeightMatches(i, delegateB, expected);
         }
 
-        assertEq(delegation.delegates(alice), delegateB);
+        assertEq(delegation.getDelegateAtEpoch(alice, newNextEpoch), delegateB);
         assertEq(delegation.syncedUserEpoch(alice), newNextEpoch + 16);
     }
 
@@ -314,9 +314,11 @@ contract DelegationTest is Test {
         vm.prank(alice);
         delegation.setDelegate(address(0));
 
-        assertEq(delegation.delegates(alice), address(0));
-
         uint256 newNextEpoch = nextEpochIndex();
+        uint256 epochForLookup = syncedUpTo > 0 ? syncedUpTo - 1 : newNextEpoch;
+
+        assertEq(delegation.getDelegateAtEpoch(alice, epochForLookup), address(0));
+
         for (uint256 i = newNextEpoch; i < syncedUpTo; i++) {
             assertWeightMatches(i, delegateA, 0);
         }
@@ -512,5 +514,164 @@ contract DelegationTest is Test {
             assertWeightMatches(i, delegateA, bobWeight);
             assertWeightMatches(i, delegateB, aliceWeight);
         }
+    }
+
+    // --- New tests for epoch-based delegate history ---
+
+    function test_delegateHistoryFirstRecord() public {
+        uint256 nextEpoch = nextEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch + 5), delegateA);
+    }
+
+    function test_delegateHistoryPreviousEpochReturnsZero() public {
+        uint256 nextEpoch = nextEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch - 1), address(0));
+    }
+
+    function test_delegateHistorySwapsTakeEffectNextEpoch() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        uint256 nextEpoch1 = nextEpochIndex();
+        uint256 currentEpoch = currentEpochIndex();
+
+        assertEq(delegation.getDelegateAtEpoch(alice, currentEpoch), address(0));
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch1), delegateA);
+
+        warpToNextEpoch();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        uint256 nextEpoch2 = nextEpochIndex();
+
+        assertEq(delegation.getDelegateAtEpoch(alice, currentEpoch), address(0));
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch1), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch2), delegateB);
+    }
+
+    function test_delegateHistoryMultipleSwapsSameEpoch() public {
+        uint256 nextEpoch = nextEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateC);
+
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), delegateC);
+
+        (address d, uint32 startEpoch) = delegation.delegateHistory(alice, 0);
+        assertEq(d, delegateC);
+        assertEq(startEpoch, uint32(nextEpoch));
+    }
+
+    function test_delegateHistoryMultipleSwapsAcrossEpochs() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        uint256 epoch1 = nextEpochIndex();
+
+        warpToNextEpoch();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        uint256 epoch2 = nextEpochIndex();
+
+        warpToNextEpoch();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateC);
+
+        uint256 epoch3 = nextEpochIndex();
+
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch1 - 1), address(0));
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch1), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch2 - 1), delegateA);
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch2), delegateB);
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch3 - 1), delegateB);
+        assertEq(delegation.getDelegateAtEpoch(alice, epoch3), delegateC);
+    }
+
+    function test_delegateHistorySwapToZeroAddress() public {
+        uint256 nextEpoch = nextEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        vm.prank(alice);
+        delegation.setDelegate(address(0));
+
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), address(0));
+    }
+
+    function test_cannotSyncAfterDelegateSetToZero() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        vm.prank(alice);
+        delegation.setDelegate(address(0));
+
+        vm.expectRevert("No delegate");
+        delegation.sync(alice);
+    }
+
+    function test_setDelegateSameEpochOverwrites() public {
+        uint256 nextEpoch = nextEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        assertEq(delegation.getDelegateAtEpoch(alice, nextEpoch), delegateB);
+
+        (address d, uint32 startEpoch) = delegation.delegateHistory(alice, 0);
+        assertEq(d, delegateB);
+        assertEq(startEpoch, uint32(nextEpoch));
+    }
+
+    function test_delegateHistoryRecords() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        uint256 epoch1 = nextEpochIndex();
+
+        warpToNextEpoch();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        uint256 epoch2 = nextEpochIndex();
+
+        (address d0, uint32 se0) = delegation.delegateHistory(alice, 0);
+        (address d1, uint32 se1) = delegation.delegateHistory(alice, 1);
+        assertEq(d0, delegateA);
+        assertEq(se0, uint32(epoch1));
+        assertEq(d1, delegateB);
+        assertEq(se1, uint32(epoch2));
     }
 }
