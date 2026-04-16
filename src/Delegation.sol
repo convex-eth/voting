@@ -25,6 +25,8 @@ contract Delegation {
         uint32 startingEpoch;
     }
 
+    error NoDelegate();
+
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public delegateEpochWeights;
@@ -66,7 +68,7 @@ contract Delegation {
         }
 
         if (_delegate != address(0)) {
-            _sync(msg.sender);
+            _syncUser(msg.sender, _delegate);
         }
 
         emit DelegateSet(msg.sender, _delegate);
@@ -75,95 +77,77 @@ contract Delegation {
     function sync(address _user) external {
         vlCVX.checkpointEpoch();
         SetDelegateRecord[] storage history = delegateHistory[_user];
-        require(history.length > 0, "No delegate");
-        require(history[history.length - 1].delegate != address(0), "No delegate");
-        _sync(_user);
+        uint256 len = history.length;
+        if (len == 0) revert NoDelegate();
+        address delegate = history[len - 1].delegate;
+        if (delegate == address(0)) revert NoDelegate();
+        _syncUser(_user, delegate);
     }
 
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
         SetDelegateRecord[] storage history = delegateHistory[_user];
-        for (uint256 i = history.length; i > 0; i--) {
-            if (history[i - 1].startingEpoch <= _epoch) {
-                return history[i - 1].delegate;
+        uint256 len = history.length;
+        for (uint256 i = len; i > 0;) {
+            unchecked { --i; }
+            if (history[i].startingEpoch <= _epoch) {
+                return history[i].delegate;
             }
         }
         return address(0);
     }
 
-    function _getEntryIndex(uint256 epoch) internal pure returns (uint256) {
-        return epoch / EPOCHS_PER_ENTRY;
-    }
-
-    function _getOffset(uint256 epoch) internal pure returns (uint256) {
-        return epoch % EPOCHS_PER_ENTRY;
-    }
-
-    function _readWeight(EpochWeightingEntry memory entry, uint256 offset) internal pure returns (uint256) {
-        uint256 raw;
-        if (offset == 0) raw = entry.w0;
-        else if (offset == 1) raw = entry.w1;
-        else if (offset == 2) raw = entry.w2;
-        else if (offset == 3) raw = entry.w3;
-        else if (offset == 4) raw = entry.w4;
-        else if (offset == 5) raw = entry.w5;
-        else if (offset == 6) raw = entry.w6;
-        else raw = entry.w7;
-        return raw * WEIGHT_DIVISOR;
-    }
-
-    function _writeWeight(EpochWeightingEntry memory entry, uint256 offset, uint256 weight) internal pure returns (EpochWeightingEntry memory) {
-        uint32 packed = uint32(weight / WEIGHT_DIVISOR);
-        if (offset == 0) entry.w0 = packed;
-        else if (offset == 1) entry.w1 = packed;
-        else if (offset == 2) entry.w2 = packed;
-        else if (offset == 3) entry.w3 = packed;
-        else if (offset == 4) entry.w4 = packed;
-        else if (offset == 5) entry.w5 = packed;
-        else if (offset == 6) entry.w6 = packed;
-        else entry.w7 = packed;
-        return entry;
-    }
-
-    function _sync(address _user) internal {
+    function _syncUser(address _user, address _delegate) internal {
         uint256 nextEpoch = vlCVX.epochCount() - 1;
-        uint256 endEpoch = nextEpoch + FILL_EPOCHS;
-        address delegate = delegateHistory[_user][delegateHistory[_user].length - 1].delegate;
+        uint256 endEpoch;
+        unchecked { endEpoch = nextEpoch + FILL_EPOCHS; }
 
-        uint256 startEntry = _getEntryIndex(nextEpoch);
-        uint256 endEntry = _getEntryIndex(endEpoch - 1);
+        uint256 startEntry = nextEpoch >> 3;
+        uint256 endEntry = (endEpoch - 1) >> 3;
 
-        for (uint256 entryIdx = startEntry; entryIdx <= endEntry; entryIdx++) {
+        for (uint256 entryIdx = startEntry; entryIdx <= endEntry;) {
             EpochWeightingEntry memory userEntry = userEpochWeights[_user][entryIdx];
-            EpochWeightingEntry memory delegateEntry = delegateEpochWeights[delegate][entryIdx];
+            EpochWeightingEntry memory delegateEntry = delegateEpochWeights[_delegate][entryIdx];
 
-            uint256 entryStartEpoch = entryIdx * EPOCHS_PER_ENTRY;
-            uint256 entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
+            uint256 entryStartEpoch;
+            uint256 entryEndEpoch;
+            unchecked {
+                entryStartEpoch = entryIdx << 3;
+                entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
+            }
 
             uint256 loopStart = nextEpoch > entryStartEpoch ? nextEpoch : entryStartEpoch;
             uint256 loopEnd = endEpoch < entryEndEpoch ? endEpoch : entryEndEpoch;
 
-            for (uint256 epoch = loopStart; epoch < loopEnd; epoch++) {
+            for (uint256 epoch = loopStart; epoch < loopEnd;) {
                 uint256 newWeight = vlCVX.balanceAtEpochOf(epoch, _user);
-                uint256 offset = _getOffset(epoch);
-                uint256 oldWeight = _readWeight(userEntry, offset);
-                uint256 currentDelegateWeight = _readWeight(delegateEntry, offset);
-
-                if (newWeight >= oldWeight) {
-                    delegateEntry = _writeWeight(delegateEntry, offset, currentDelegateWeight + (newWeight - oldWeight));
-                } else {
-                    delegateEntry = _writeWeight(delegateEntry, offset, currentDelegateWeight - (oldWeight - newWeight));
+                uint256 offset = epoch & 7;
+                uint256 oldWeightPacked;
+                uint256 delegateSlot;
+                assembly {
+                    oldWeightPacked := mload(add(userEntry, mul(offset, 32)))
+                    delegateSlot := add(delegateEntry, mul(offset, 32))
                 }
-
-                userEntry = _writeWeight(userEntry, offset, newWeight);
+                uint256 newWeightPacked = newWeight / WEIGHT_DIVISOR;
+                unchecked {
+                    uint256 delta = newWeightPacked - oldWeightPacked;
+                    assembly {
+                        mstore(delegateSlot, add(mload(delegateSlot), delta))
+                    }
+                }
+                assembly {
+                    mstore(add(userEntry, mul(offset, 32)), newWeightPacked)
+                }
+                unchecked { ++epoch; }
             }
 
             userEpochWeights[_user][entryIdx] = userEntry;
-            delegateEpochWeights[delegate][entryIdx] = delegateEntry;
+            delegateEpochWeights[_delegate][entryIdx] = delegateEntry;
+            unchecked { ++entryIdx; }
         }
 
         syncedUserEpoch[_user] = endEpoch;
 
-        emit Synced(_user, delegate);
+        emit Synced(_user, _delegate);
     }
 
     function _removeUser(address _user, address _delegate) internal {
@@ -175,30 +159,43 @@ contract Delegation {
             return;
         }
 
-        uint256 startEntry = _getEntryIndex(nextEpoch);
-        uint256 endEntry = _getEntryIndex(endEpoch - 1);
+        uint256 startEntry = nextEpoch >> 3;
+        uint256 endEntry = (endEpoch - 1) >> 3;
 
-        for (uint256 entryIdx = startEntry; entryIdx <= endEntry; entryIdx++) {
+        for (uint256 entryIdx = startEntry; entryIdx <= endEntry;) {
             EpochWeightingEntry memory userEntry = userEpochWeights[_user][entryIdx];
             EpochWeightingEntry memory delegateEntry = delegateEpochWeights[_delegate][entryIdx];
 
-            uint256 entryStartEpoch = entryIdx * EPOCHS_PER_ENTRY;
-            uint256 entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
+            uint256 entryStartEpoch;
+            uint256 entryEndEpoch;
+            unchecked {
+                entryStartEpoch = entryIdx << 3;
+                entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
+            }
 
             uint256 loopStart = nextEpoch > entryStartEpoch ? nextEpoch : entryStartEpoch;
             uint256 loopEnd = endEpoch < entryEndEpoch ? endEpoch : entryEndEpoch;
 
-            for (uint256 epoch = loopStart; epoch < loopEnd; epoch++) {
-                uint256 offset = _getOffset(epoch);
-                uint256 weight = _readWeight(userEntry, offset);
-                uint256 currentDelegateWeight = _readWeight(delegateEntry, offset);
-
-                delegateEntry = _writeWeight(delegateEntry, offset, currentDelegateWeight - weight);
-                userEntry = _writeWeight(userEntry, offset, 0);
+            for (uint256 epoch = loopStart; epoch < loopEnd;) {
+                uint256 offset = epoch & 7;
+                uint256 weight;
+                uint256 delegateSlot;
+                assembly {
+                    weight := mload(add(userEntry, mul(offset, 32)))
+                    delegateSlot := add(delegateEntry, mul(offset, 32))
+                }
+                assembly {
+                    mstore(delegateSlot, sub(mload(delegateSlot), weight))
+                }
+                assembly {
+                    mstore(add(userEntry, mul(offset, 32)), 0)
+                }
+                unchecked { ++epoch; }
             }
 
             delegateEpochWeights[_delegate][entryIdx] = delegateEntry;
             userEpochWeights[_user][entryIdx] = userEntry;
+            unchecked { ++entryIdx; }
         }
 
         syncedUserEpoch[_user] = 0;
@@ -206,28 +203,28 @@ contract Delegation {
 
     function balanceOf(address _delegate) external view returns (uint256) {
         uint256 currentEpoch = vlCVX.findEpochId(block.timestamp);
-        uint256 entryIdx = _getEntryIndex(currentEpoch);
-        uint256 offset = _getOffset(currentEpoch);
-        return _readWeight(delegateEpochWeights[_delegate][entryIdx], offset);
+        return _readMemWeight(delegateEpochWeights[_delegate][currentEpoch >> 3], currentEpoch & 7);
     }
 
     function balanceAtEpochOf(uint256 _epoch, address _delegate) external view returns (uint256) {
-        uint256 entryIdx = _getEntryIndex(_epoch);
-        uint256 offset = _getOffset(_epoch);
-        return _readWeight(delegateEpochWeights[_delegate][entryIdx], offset);
+        return _readMemWeight(delegateEpochWeights[_delegate][_epoch >> 3], _epoch & 7);
     }
 
     function getUserWeight(address _user) external view returns (uint256) {
         uint256 currentEpoch = vlCVX.findEpochId(block.timestamp);
-        uint256 entryIdx = _getEntryIndex(currentEpoch);
-        uint256 offset = _getOffset(currentEpoch);
-        return _readWeight(userEpochWeights[_user][entryIdx], offset);
+        return _readMemWeight(userEpochWeights[_user][currentEpoch >> 3], currentEpoch & 7);
     }
 
     function userWeightAtEpochOf(uint256 _epoch, address _user) external view returns (uint256) {
-        uint256 entryIdx = _getEntryIndex(_epoch);
-        uint256 offset = _getOffset(_epoch);
-        return _readWeight(userEpochWeights[_user][entryIdx], offset);
+        return _readMemWeight(userEpochWeights[_user][_epoch >> 3], _epoch & 7);
+    }
+
+    function _readMemWeight(EpochWeightingEntry memory entry, uint256 offset) internal pure returns (uint256) {
+        uint256 raw;
+        assembly {
+            raw := mload(add(entry, mul(offset, 32)))
+        }
+        return raw * WEIGHT_DIVISOR;
     }
 
     function epochCount() external view returns (uint256) {

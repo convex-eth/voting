@@ -5,6 +5,8 @@ import "forge-std/Test.sol";
 import "../src/Delegation.sol";
 import "./mocks/MockVlCVX.sol";
 
+error NoDelegate();
+
 contract DelegationTest is Test {
     MockVlCVX internal mockVlCVX;
     Delegation internal delegation;
@@ -325,7 +327,7 @@ contract DelegationTest is Test {
     }
 
     function test_cannotSyncWithoutDelegate() public {
-        vm.expectRevert("No delegate");
+        vm.expectRevert(NoDelegate.selector);
         delegation.sync(alice);
     }
 
@@ -632,7 +634,7 @@ contract DelegationTest is Test {
         vm.prank(alice);
         delegation.setDelegate(address(0));
 
-        vm.expectRevert("No delegate");
+        vm.expectRevert(NoDelegate.selector);
         delegation.sync(alice);
     }
 
