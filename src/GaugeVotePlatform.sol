@@ -111,20 +111,30 @@ contract GaugeVotePlatform{
 
         userInfo[_proposalId][_account].baseWeight = baseWeight;
         userInfo[_proposalId][_account].delegate = delegate;
-
-        if (delegate != _account) {
-            uint256 delegatedWeight = _getDelegatedWeight(_account, epoch);
-            int256 incomingWeight = int256(_getDelegateTotalWeight(delegate, epoch)) - int256(delegatedWeight);
-
-            if (userInfo[_proposalId][delegate].baseWeight != 0) {
-                incomingWeight -= int256(userInfo[_proposalId][delegate].baseWeight);
-                incomingWeight -= userInfo[_proposalId][delegate].adjustedWeight;
-            }
-
-            userInfo[_proposalId][_account].adjustedWeight = incomingWeight;
-        }
+        userInfo[_proposalId][_account].adjustedWeight += int256(_getDelegateTotalWeight(_account, epoch));
 
         emit UserWeightChange(_proposalId, _account, baseWeight, userInfo[_proposalId][_account].adjustedWeight);
+
+        if (delegate != _account) {
+            _ensureUserInfo(delegate, _proposalId);
+
+            int256 delegatedWeight = int256(_getDelegatedWeight(_account, epoch));
+
+            if (userInfo[_proposalId][delegate].voteStatus > 0) {
+                int256 delegateTotalWeight = int256(userInfo[_proposalId][delegate].baseWeight) + userInfo[_proposalId][delegate].adjustedWeight;
+
+                for (uint256 i = 0; i < votes[_proposalId][delegate].gauges.length; i++) {
+                    int256 oldContribution = int256(votes[_proposalId][delegate].weights[i]) * delegateTotalWeight / int256(max_weight);
+                    int256 newContribution = int256(votes[_proposalId][delegate].weights[i]) * (delegateTotalWeight - delegatedWeight) / int256(max_weight);
+                    _changeGaugeTotal(_proposalId, votes[_proposalId][delegate].gauges[i], newContribution - oldContribution);
+                }
+
+                voteTotals[_proposalId] -= uint256(delegatedWeight);
+            }
+
+            userInfo[_proposalId][delegate].adjustedWeight -= delegatedWeight;
+            emit UserWeightChange(_proposalId, delegate, userInfo[_proposalId][delegate].baseWeight, userInfo[_proposalId][delegate].adjustedWeight);
+        }
     }
 
     function _vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) internal {
@@ -170,31 +180,7 @@ contract GaugeVotePlatform{
         if(userInfo[proposalId][_account].voteStatus == 0){
             userInfo[proposalId][_account].voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
             votedUsers[proposalId].push(_account);
-
             voteTotals[proposalId] += uint256(userWeight);
-
-            address delegate = userInfo[proposalId][_account].delegate;
-            if(delegate != _account) {
-                uint256 epoch = proposals[proposalId].epoch;
-                int256 delegateeWeight = int256(_getDelegatedWeight(_account, epoch));
-
-                _ensureUserInfo(delegate, proposalId);
-
-                if(userInfo[proposalId][delegate].voteStatus > 0){
-                    int256 delegateTotalWeight = int256(userInfo[proposalId][delegate].baseWeight) + userInfo[proposalId][delegate].adjustedWeight;
-
-                    for(uint256 i = 0; i < votes[proposalId][delegate].gauges.length; i++) {
-                        int256 oldContribution = int256(votes[proposalId][delegate].weights[i]) * delegateTotalWeight / int256(max_weight);
-                        int256 newContribution = int256(votes[proposalId][delegate].weights[i]) * (delegateTotalWeight - delegateeWeight) / int256(max_weight);
-                        _changeGaugeTotal(proposalId, votes[proposalId][delegate].gauges[i], newContribution - oldContribution);
-                    }
-
-                    voteTotals[proposalId] -= uint256(delegateeWeight);
-                }
-
-                userInfo[proposalId][delegate].adjustedWeight -= delegateeWeight;
-                emit UserWeightChange(proposalId, delegate, userInfo[proposalId][delegate].baseWeight, userInfo[proposalId][delegate].adjustedWeight);
-            }
         }
     }
 
@@ -273,7 +259,8 @@ contract GaugeVotePlatform{
         require(_endTime - _startTime >= 3 days, "!time");
         require(_endTime - _startTime <= 6 days, "!time");
 
-        uint256 epoch = vlCVX.findEpochId(_startTime);
+        vlCVX.checkpointEpoch();
+        uint256 epoch = vlCVX.epochCount() - 2;
 
         proposals.push(Proposal({
             startTime: _startTime,
