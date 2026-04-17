@@ -6,6 +6,7 @@ import "../src/Delegation.sol";
 import "./mocks/MockVlCVX.sol";
 
 error NoDelegate();
+error SelfDelegation();
 
 contract DelegationTest is Test {
     MockVlCVX internal mockVlCVX;
@@ -324,6 +325,12 @@ contract DelegationTest is Test {
         for (uint256 i = newNextEpoch; i < syncedUpTo; i++) {
             assertWeightMatches(i, delegateA, 0);
         }
+    }
+
+    function test_cannotSelfDelegate() public {
+        vm.prank(alice);
+        vm.expectRevert(SelfDelegation.selector);
+        delegation.setDelegate(alice);
     }
 
     function test_cannotSyncWithoutDelegate() public {

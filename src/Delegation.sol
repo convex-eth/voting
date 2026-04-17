@@ -26,6 +26,7 @@ contract Delegation {
     }
 
     error NoDelegate();
+    error SelfDelegation();
 
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
@@ -37,6 +38,7 @@ contract Delegation {
     }
 
     function setDelegate(address _delegate) external {
+        if (_delegate == msg.sender) revert SelfDelegation();
         vlCVX.checkpointEpoch();
         uint256 nextEpoch = vlCVX.epochCount() - 1;
 
