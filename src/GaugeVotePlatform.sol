@@ -31,6 +31,7 @@ contract GaugeVotePlatform{
         int256 adjustedWeight;
         address delegate;
         uint8 voteStatus;
+        bool hasUpdated;
     }
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     mapping(uint256 => address[]) public votedUsers;
@@ -96,9 +97,8 @@ contract GaugeVotePlatform{
         return delegation.balanceAtEpochOf(_epoch, _delegate);
     }
 
-    function _ensureUserInfo(address _account, uint256 _proposalId) internal {
-        if (userInfo[_proposalId][_account].voteStatus != 0) return;
-        if (userInfo[_proposalId][_account].baseWeight != 0) return;
+    function _initBaseInfo(address _account, uint256 _proposalId) internal {
+        if (userInfo[_proposalId][_account].delegate != address(0)) return;
 
         uint256 epoch = proposals[_proposalId].epoch;
 
@@ -116,23 +116,26 @@ contract GaugeVotePlatform{
         emit UserWeightChange(_proposalId, _account, baseWeight, userInfo[_proposalId][_account].adjustedWeight);
 
         if (delegate != _account) {
-            _ensureUserInfo(delegate, _proposalId);
-
-            int256 delegatedWeight = int256(_getDelegatedWeight(_account, epoch));
+            int256 weightToRemove;
+            if (userInfo[_proposalId][_account].hasUpdated) {
+                weightToRemove = int256(baseWeight);
+            } else {
+                weightToRemove = int256(_getDelegatedWeight(_account, epoch));
+            }
 
             if (userInfo[_proposalId][delegate].voteStatus > 0) {
                 int256 delegateTotalWeight = int256(userInfo[_proposalId][delegate].baseWeight) + userInfo[_proposalId][delegate].adjustedWeight;
 
                 for (uint256 i = 0; i < votes[_proposalId][delegate].gauges.length; i++) {
                     int256 oldContribution = int256(votes[_proposalId][delegate].weights[i]) * delegateTotalWeight / int256(max_weight);
-                    int256 newContribution = int256(votes[_proposalId][delegate].weights[i]) * (delegateTotalWeight - delegatedWeight) / int256(max_weight);
+                    int256 newContribution = int256(votes[_proposalId][delegate].weights[i]) * (delegateTotalWeight - weightToRemove) / int256(max_weight);
                     _changeGaugeTotal(_proposalId, votes[_proposalId][delegate].gauges[i], newContribution - oldContribution);
                 }
 
-                voteTotals[_proposalId] -= uint256(delegatedWeight);
+                voteTotals[_proposalId] -= uint256(weightToRemove);
             }
 
-            userInfo[_proposalId][delegate].adjustedWeight -= delegatedWeight;
+            userInfo[_proposalId][delegate].adjustedWeight -= weightToRemove;
             emit UserWeightChange(_proposalId, delegate, userInfo[_proposalId][delegate].baseWeight, userInfo[_proposalId][delegate].adjustedWeight);
         }
     }
@@ -147,12 +150,11 @@ contract GaugeVotePlatform{
         }
         require(_gauges.length == _weights.length, "mismatch");
 
-        _ensureUserInfo(_account, proposalId);
-
-        require(userInfo[proposalId][_account].baseWeight > 0, "!weight");
+        _initBaseInfo(_account, proposalId);
 
         int256 userbase = int256(userInfo[proposalId][_account].baseWeight);
         int256 userWeight = userbase + userInfo[proposalId][_account].adjustedWeight;
+        require(userWeight > 0, "!weight");
 
         if(userInfo[proposalId][_account].voteStatus > 0){
             for(uint256 i = 0; i < votes[proposalId][_account].gauges.length; i++) {
@@ -217,36 +219,41 @@ contract GaugeVotePlatform{
 
     function updateUserWeight(address _account) external onlyAcceptedSigner(_account){
         uint256 proposalId = proposals.length - 1;
-        _ensureUserInfo(_account, proposalId);
-        require(userInfo[proposalId][_account].voteStatus == 0, "already voted");
+        require(!userInfo[proposalId][_account].hasUpdated, "already updated");
 
         uint256 epoch = proposals[proposalId].epoch;
-        uint256 newBaseWeight = _getBaseWeight(_account, epoch);
-        uint256 currentWeight = userInfo[proposalId][_account].baseWeight;
-        address delegate = userInfo[proposalId][_account].delegate;
+        uint256 currentBalance = _getBaseWeight(_account, epoch);
+        uint256 delegatedWeight = _getDelegatedWeight(_account, epoch);
 
-        if (newBaseWeight <= currentWeight) return;
+        if (currentBalance == delegatedWeight) return;
 
-        int256 userDifference = int256(newBaseWeight) - int256(currentWeight);
+        int256 diff = int256(currentBalance) - int256(delegatedWeight);
 
-        if(delegate != _account) {
-            _ensureUserInfo(delegate, proposalId);
+        userInfo[proposalId][_account].hasUpdated = true;
 
-            if(userInfo[proposalId][delegate].voteStatus > 0) {
+        address delegate = _getDelegate(_account, epoch);
+        if (delegate == address(0)) {
+            delegate = _account;
+        }
+
+        if (delegate != _account) {
+            if (userInfo[proposalId][delegate].voteStatus > 0) {
                 int256 delegateTotalWeight = int256(userInfo[proposalId][delegate].baseWeight) + userInfo[proposalId][delegate].adjustedWeight;
-                for(uint256 i = 0; i < votes[proposalId][delegate].gauges.length; i++) {
+                for (uint256 i = 0; i < votes[proposalId][delegate].gauges.length; i++) {
                     int256 oldContribution = int256(votes[proposalId][delegate].weights[i]) * delegateTotalWeight / int256(max_weight);
-                    int256 newContribution = int256(votes[proposalId][delegate].weights[i]) * (delegateTotalWeight + userDifference) / int256(max_weight);
+                    int256 newContribution = int256(votes[proposalId][delegate].weights[i]) * (delegateTotalWeight + diff) / int256(max_weight);
                     _changeGaugeTotal(proposalId, votes[proposalId][delegate].gauges[i], newContribution - oldContribution);
+                }
+                if (diff > 0) {
+                    voteTotals[proposalId] += uint256(diff);
+                } else {
+                    voteTotals[proposalId] -= uint256(-diff);
                 }
             }
 
-            userInfo[proposalId][delegate].adjustedWeight += userDifference;
+            userInfo[proposalId][delegate].adjustedWeight += diff;
             emit UserWeightChange(proposalId, delegate, userInfo[proposalId][delegate].baseWeight, userInfo[proposalId][delegate].adjustedWeight);
         }
-
-        userInfo[proposalId][_account].baseWeight = newBaseWeight;
-        emit UserWeightChange(proposalId, _account, newBaseWeight, userInfo[proposalId][_account].adjustedWeight);
     }
 
     function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {

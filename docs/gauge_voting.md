@@ -21,13 +21,21 @@ GaugeVotePlatform is a Convex gauge voting contract that allows vlCVX holders an
 - Each proposal records an **epoch**: `vlCVX.checkpointEpoch()` is called to ensure the epoch data is current, then `epoch = vlCVX.epochCount() - 2` (minus 2 because `epochCount() - 1` is the NEXT epoch, so `epochCount() - 2` is the CURRENT epoch). This epoch anchors all weight lookups for that proposal.
 - Operators can force-end an active proposal via `forceEndProposal()`, which zeros out `startTime`, `endTime`, and `epoch`
 
+## Delegation Depth
+
+Delegation is strictly **depth 1**. If A delegates to B who delegates to C:
+- C's `adjustedWeight` contains **only B's** Delegation weight (not A's — A's weight flows through B, and the Delegation contract only shows direct delegations)
+- A's weight is subtracted from B's `adjustedWeight` when A is initialized
+- B's weight is subtracted from C's `adjustedWeight` when B is initialized
+- These are separate, non-recursive operations: each user's delegate chain is processed exactly once, only when that user interacts with the platform
+
 ## Weight Sources
 
 ### baseWeight
 
 - Always read from `vlCVX.balanceAtEpochOf(proposalEpoch, user)`
 - This is the user's raw vlCVX balance at the proposal epoch
-- A user with `baseWeight == 0` cannot vote
+- A user with `baseWeight == 0` can still vote if they have `adjustedWeight > 0` (e.g. they are a pure delegate receiving delegated weight)
 
 ### delegate
 
@@ -38,13 +46,13 @@ GaugeVotePlatform is a Convex gauge voting contract that allows vlCVX holders an
 
 ### adjustedWeight (signed int256)
 
-`adjustedWeight` represents the weight that **other people have delegated TO this user**. It is always a positive number in normal operation (it only goes negative in edge cases, see below).
+`adjustedWeight` represents the weight that **other people have delegated TO this user**. It is always a positive number in normal operation (it can go negative in edge cases).
 
 - For every user on initialization: `adjustedWeight += delegation.balanceAtEpochOf(user, epoch)`
   - This adds the total weight delegated TO this user from the Delegation contract
   - For a user nobody delegates to, this is 0
   - For a delegate who has 3 delegatees, this is the sum of all 3 delegatees' Delegation weights
-- A user who does **not** have a delegate (self-delegating) may still have a positive `adjustedWeight` if other users delegate TO them — i.e. they are a delegate for other people
+- A user who does **not** have a delegate may still have a positive `adjustedWeight` if other users delegate TO them — i.e. they are a delegate for other people
 - A user's **effective voting weight** = `baseWeight + adjustedWeight`
 - `adjustedWeight` decreases as delegatees are "claimed" — when a delegatee is initialized, their Delegation weight is subtracted from the delegate's `adjustedWeight`
 
@@ -54,36 +62,30 @@ The Delegation contract stores weights as `uint32` values divided by `1e17`. Thi
 
 When a delegatee is initialized and we need to subtract their weight from the delegate's `adjustedWeight`, we **must** use the Delegation contract's truncated `userWeightAtEpochOf()` — not the raw `vlCVX.balanceAtEpochOf()`. Using the raw vlCVX value would create a mismatch with the Delegation contract's internal accounting.
 
-## Lazy Initialization (_ensureUserInfo)
+## Lazy Initialization (_initBaseInfo)
 
-UserInfo is not populated at proposal creation. It is lazily initialized the first time a user interacts with the platform (via `vote` or `updateUserWeight`). The `_ensureUserInfo` function:
+UserInfo is not populated at proposal creation. `_initBaseInfo` is called **only when voting** (from `_vote`). It is never called from `updateUserWeight`. It is idempotent — guarded by `delegate != address(0)`.
 
-1. Returns immediately if `voteStatus != 0` or `baseWeight != 0` (already initialized)
+1. Returns immediately if `delegate != address(0)` (already initialized)
 2. Reads `baseWeight` from vlCVX at the proposal epoch
 3. Reads `delegate` from Delegation at the proposal epoch (defaults to self if zero)
 4. Sets `baseWeight` and `delegate` on userInfo
 5. `adjustedWeight += delegation.balanceAtEpochOf(user, epoch)` — adds all weight delegated TO this user
-6. Emits `UserWeightChange` for this user
+6. Emits `UserWeightChange`
 
-Then, if this user has a real delegate (delegate != self):
+Then, if the user has a real delegate (`delegate != _account`):
 
-7. `_ensureUserInfo(delegate)` — recursively initializes the delegate (so the delegate gets their full `adjustedWeight` from Delegation first)
-8. Reads `delegatedWeight = delegation.userWeightAtEpochOf(user, epoch)` (this user's truncated Delegation weight)
-9. If the delegate has already voted (`voteStatus > 0`):
-   - Recalculates the delegate's gauge contributions: old total weight vs new total weight (minus this user's delegated weight)
+7. Determines `weightToRemove`:
+   - If `hasUpdated == true`: `weightToRemove = baseWeight` (the user updated via `updateUserWeight`, so the vlCVX value is the current truth)
+   - If `hasUpdated == false`: `weightToRemove = delegation.userWeightAtEpochOf(user, epoch)` (the Delegation truncated value)
+8. If the delegate has already voted (`voteStatus > 0`):
+   - Recalculates the delegate's gauge contributions from `(delegateTotalWeight)` to `(delegateTotalWeight - weightToRemove)`
    - Applies the delta to `gaugeTotals`
-   - Subtracts `delegatedWeight` from `voteTotals`
-10. `delegate.adjustedWeight -= delegatedWeight` — removes this user's weight from the delegate's pool
-11. Emits `UserWeightChange` for the delegate
+   - Subtracts `weightToRemove` from `voteTotals`
+9. `delegate.adjustedWeight -= weightToRemove` — removes this user's weight from the delegate's pool
+10. Emits `UserWeightChange` for the delegate
 
-This ensures that:
-- The delegate's `adjustedWeight` only includes weights of delegatees who have NOT yet been initialized
-- When the delegate eventually votes, they only vote with: their own `baseWeight` + unclaimed delegatees' weights
-- Each delegatee is "claimed" exactly once
-
-### Recursive initialization
-
-When `_ensureUserInfo(delegate)` is called in step 7, the delegate gets initialized with their full `adjustedWeight` from Delegation (which includes ALL delegatees). Then step 10 subtracts only the current user's portion. If another delegatee initializes later, they'll find the delegate already initialized and just subtract their own portion. The end result: the delegate's `adjustedWeight` reflects only the delegatees who haven't been claimed yet.
+**No recursive calls.** The delegate's own base info is NOT initialized here. The delegate's `adjustedWeight` may go negative from the subtraction, but when the delegate eventually votes and `_initBaseInfo` runs for them, `delegation.balanceAtEpochOf(delegate, epoch)` gets added, netting out correctly.
 
 ## Voting Flow
 
@@ -99,6 +101,7 @@ Called by the user directly or by their registered surrogate.
 - Each `_gauges[i]` must be a valid gauge via `GaugeRegistry.isValidGauge()`
 - Caller must pass `_canSign(_account)` check (must be `_account` themselves or their registered surrogate)
 - If `_account` has `Voted` status and `msg.sender != _account`, the call is rejected (a surrogate cannot override a direct vote)
+- Effective voting weight (`baseWeight + adjustedWeight`) must be > 0
 
 **Re-voting (changing vote):**
 
@@ -110,29 +113,33 @@ If the user has already voted (`voteStatus > 0`):
 
 **New vote (first vote):**
 
-1. `_ensureUserInfo` to initialize if needed (this also handles all delegate adjustments)
-2. Record gauge allocations: for each gauge, add `weight[i] * userWeight / 10000` to `gaugeTotals`
-3. Set `voteStatus` to `Voted` (direct) or `VotedViaSurrogate` (surrogate)
-4. Add user to `votedUsers` array
-5. Add `userWeight` to `voteTotals`
-
-Note: the delegate adjustment (subtracting delegatee weight from delegate) is handled entirely within `_ensureUserInfo`, not in `_vote`. The `_vote` function only deals with recording the user's own vote.
+1. `_initBaseInfo` to initialize (this also handles delegate weight removal)
+2. Verify `userWeight > 0` (effective weight must be positive)
+3. Record gauge allocations: for each gauge, add `weight[i] * userWeight / 10000` to `gaugeTotals`
+4. Set `voteStatus` to `Voted` (direct) or `VotedViaSurrogate` (surrogate)
+5. Add user to `votedUsers` array
+6. Add `userWeight` to `voteTotals`
 
 ### updateUserWeight(_account)
 
-Called to refresh a user's base weight if vlCVX balance has increased since the proposal epoch snapshot. Only callable before the user has voted (`voteStatus == 0`).
+Called to push a weight difference to the delegate before voting. Can only be called once (`hasUpdated` must be false). Does NOT call `_initBaseInfo` — reads from Delegation and vlCVX directly.
 
-1. `_ensureUserInfo` the user
-2. Read fresh `baseWeight` from vlCVX
-3. If `newBaseWeight <= currentWeight`, return early (no change)
-4. Compute `userDifference = int256(newBaseWeight) - int256(currentWeight)`
-5. If the user has a real delegate:
-   - `_ensureUserInfo` the delegate
-   - If the delegate has already voted, adjust gauge totals to reflect the increased delegate weight
-   - Add `userDifference` to delegate's `adjustedWeight`
-6. Update user's `baseWeight` to `newBaseWeight`
+1. Require `hasUpdated == false`
+2. Compute `diff = vlCVX.balanceAtEpochOf(epoch, user) - delegation.userWeightAtEpochOf(epoch, user)`
+3. If `diff == 0`, return (no change)
+4. Set `hasUpdated = true`
+5. If the user has a real delegate (read from Delegation):
+   - If the delegate has already voted, recalculate the delegate's gauge contributions with `(delegateTotalWeight + diff)` and apply delta to `gaugeTotals` and `voteTotals`
+   - `delegate.adjustedWeight += diff`
 
-**Note:** `updateUserWeight` only handles weight increases, not decreases. vlCVX balances can decrease due to lock expiry, but these are not tracked in this function.
+**Why `hasUpdated` matters:**
+
+When `updateUserWeight` adds the diff to the delegate's `adjustedWeight`, the delegate now carries extra weight. Later, when the user votes, `_initBaseInfo` checks `hasUpdated`:
+
+- `hasUpdated == false`: removes `delegation.userWeightAtEpochOf()` (the original Delegation truncated value) from the delegate
+- `hasUpdated == true`: removes `baseWeight` (the full vlCVX value) from the delegate, since the diff was already applied to the delegate
+
+This ensures the delegate's adjustedWeight ends up correct regardless of whether `updateUserWeight` was called.
 
 ## Weight Calculation Examples
 
@@ -150,24 +157,20 @@ Delegation state at proposal epoch:
   delegation.userWeightAtEpochOf(Bob, epoch) = 500
 
 1. Carol votes:
-   _ensureUserInfo(Carol):
-     baseWeight = 2000
-     delegate = Carol (self)
-     adjustedWeight += delegation.balanceAtEpochOf(Carol, epoch) = 1500
-     Carol: baseWeight=2000, adjustedWeight=1500
+   _initBaseInfo(Carol):
+     baseWeight = 2000, delegate = Carol (self)
+     adjustedWeight += 1500
+   Carol: baseWeight=2000, adjustedWeight=1500
    userWeight = 2000 + 1500 = 3500
    → Carol votes with 3500 (her own 2000 + Alice's 1000 + Bob's 500)
 
 2. Alice votes:
-   _ensureUserInfo(Alice):
-     baseWeight = 1000
-     delegate = Carol
-     adjustedWeight += delegation.balanceAtEpochOf(Alice, epoch) = 0  (nobody delegates to Alice)
-     Alice: baseWeight=1000, adjustedWeight=0
+   _initBaseInfo(Alice):
+     baseWeight = 1000, delegate = Carol
+     adjustedWeight += 0 (nobody delegates to Alice)
      
-     Delegate adjustment:
-       _ensureUserInfo(Carol) → returns early (already initialized)
-       delegatedWeight = delegation.userWeightAtEpochOf(Alice, epoch) = 1000
+     Delegate removal (hasUpdated == false):
+       weightToRemove = delegation.userWeightAtEpochOf(Alice) = 1000
        Carol already voted:
          old delegateTotal = 2000 + 1500 = 3500
          new delegateTotal = 3500 - 1000 = 2500
@@ -176,19 +179,16 @@ Delegation state at proposal epoch:
        Carol.adjustedWeight -= 1000 → Carol.adjustedWeight = 500
    
    userWeight = 1000 + 0 = 1000
-   → Alice votes with 1000 (her own weight)
+   → Alice votes with 1000
    → Carol's effective weight is now 2000 + 500 = 2500
 
 3. Bob votes:
-   _ensureUserInfo(Bob):
-     baseWeight = 500
-     delegate = Carol
-     adjustedWeight += delegation.balanceAtEpochOf(Bob, epoch) = 0
-     Bob: baseWeight=500, adjustedWeight=0
+   _initBaseInfo(Bob):
+     baseWeight = 500, delegate = Carol
+     adjustedWeight += 0
      
-     Delegate adjustment:
-       _ensureUserInfo(Carol) → returns early
-       delegatedWeight = delegation.userWeightAtEpochOf(Bob, epoch) = 500
+     Delegate removal:
+       weightToRemove = 500
        Carol already voted:
          old delegateTotal = 2000 + 500 = 2500
          new delegateTotal = 2500 - 500 = 2000
@@ -217,94 +217,217 @@ Delegation state:
   delegation.userWeightAtEpochOf(Alice, epoch) = 500
 
 1. Alice votes:
-   _ensureUserInfo(Alice):
-     baseWeight = 500
-     delegate = Bob
-     adjustedWeight += delegation.balanceAtEpochOf(Alice, epoch) = 0
+   _initBaseInfo(Alice):
+     baseWeight = 500, delegate = Bob
+     adjustedWeight += 0
      Alice: baseWeight=500, adjustedWeight=0
      
-     Delegate adjustment:
-       _ensureUserInfo(Bob):                          ← recursive
-         baseWeight = 1000
-         delegate = Bob (self)
-         adjustedWeight += delegation.balanceAtEpochOf(Bob, epoch) = 500
-         Bob: baseWeight=1000, adjustedWeight=500
-       
-       delegatedWeight = delegation.userWeightAtEpochOf(Alice, epoch) = 500
-       Bob has NOT voted yet:
-         No gauge adjustment needed
-       Bob.adjustedWeight -= 500 → Bob.adjustedWeight = 0
+     Delegate removal (hasUpdated == false):
+       weightToRemove = delegation.userWeightAtEpochOf(Alice) = 500
+       Bob has NOT voted: no gauge adjustment
+       Bob.adjustedWeight -= 500 (Bob.adjustedWeight = -500)
    
    userWeight = 500 + 0 = 500
    → Alice votes with 500 ✓
 
 2. Bob votes:
-   _ensureUserInfo(Bob) → returns early (already initialized)
-   Bob: baseWeight=1000, adjustedWeight=0
+   _initBaseInfo(Bob):
+     baseWeight = 1000, delegate = Bob (self)
+     adjustedWeight += delegation.balanceAtEpochOf(Bob) = 500
+     Bob.adjustedWeight = -500 + 500 = 0 ✓
+     No delegate (self)
+   
    userWeight = 1000 + 0 = 1000
-   → Bob votes with 1000 ✓ (only his own weight, Alice already claimed)
+   → Bob votes with 1000 ✓
 
 Final totals: Alice 500 + Bob 1000 = 1500 ✓
+
+Note: Bob.adjustedWeight went negative after Alice's vote, then netted to 0
+when Bob's _initBaseInfo added the delegation total. No recursive calls.
 ```
 
-### Scenario 3: Self-delegating user (no delegation)
+### Scenario 3: Chain delegation (A→B→C, depth 1 only)
+
+```
+Delegation state:
+  - Alice: vlCVX = 500, delegates to Bob
+  - Bob:   vlCVX = 1000, delegates to Carol
+  - Carol: vlCVX = 3000
+
+  delegation.balanceAtEpochOf(Bob, epoch) = 500   (Alice's delegation, NOT Carol's)
+  delegation.balanceAtEpochOf(Carol, epoch) = 1000  (Bob's delegation, NOT Alice's)
+
+1. Alice votes:
+   _initBaseInfo(Alice):
+     baseWeight = 500, delegate = Bob
+     adjustedWeight += 0
+     
+     Delegate removal:
+       weightToRemove = 500
+       Bob has NOT voted: no gauge adjustment
+       Bob.adjustedWeight -= 500 (Bob.adjustedWeight = -500)
+   
+   Alice votes with 500
+
+   Note: Bob is NOT initialized. Bob.adjustedWeight went negative.
+   Bob's delegate chain (B→C) is NOT touched.
+
+2. Bob votes:
+   _initBaseInfo(Bob):
+     baseWeight = 1000, delegate = Carol
+     adjustedWeight += delegation.balanceAtEpochOf(Bob) = 500
+     Bob.adjustedWeight = -500 + 500 = 0
+     
+     Delegate removal (Bob→Carol):
+       weightToRemove = delegation.userWeightAtEpochOf(Bob) = 1000
+       Carol has NOT voted: no gauge adjustment
+       Carol.adjustedWeight -= 1000 (Carol.adjustedWeight = -1000)
+   
+   Bob votes with 1000 (baseWeight=1000, adjustedWeight=0)
+
+3. Carol votes:
+   _initBaseInfo(Carol):
+     baseWeight = 3000, delegate = Carol (self)
+     adjustedWeight += delegation.balanceAtEpochOf(Carol) = 1000
+     Carol.adjustedWeight = -1000 + 1000 = 0
+     No delegate removal (self)
+   
+   Carol votes with 3000
+
+Final totals: Alice 500 + Bob 1000 + Carol 3000 = 4500 ✓
+
+Key insight: adjustedWeight goes negative when delegatees vote first,
+then nets to the correct value when the delegate's _initBaseInfo runs.
+Each delegation hop is processed exactly once. No recursive calls.
+```
+
+### Scenario 4: Self-delegating user (no delegation)
 
 ```
 vlCVX state:
   - Charlie: vlCVX = 3000, no delegation set
 
 1. Charlie votes:
-   _ensureUserInfo(Charlie):
+   _initBaseInfo(Charlie):
      baseWeight = 3000
      delegate = address(0) → set to Charlie
-     adjustedWeight += delegation.balanceAtEpochOf(Charlie, epoch) = 0  (nobody delegates to Charlie)
-     Charlie: baseWeight=3000, adjustedWeight=0
+     adjustedWeight += 0 (nobody delegates to Charlie)
+   Charlie: baseWeight=3000, adjustedWeight=0
    userWeight = 3000 + 0 = 3000 ✓
 ```
 
-### Scenario 4: User is both a delegate AND has their own delegate
+### Scenario 5: Pure delegate (zero baseWeight, positive adjustedWeight)
 
 ```
 Delegation state:
-  - Alice: vlCVX = 1000, delegates to Bob
-  - Bob:   vlCVX = 2000, delegates to Eve
-  - Eve:   vlCVX = 3000
+  - Dave: vlCVX = 0 (no locks), but Alice and Bob delegate to Dave
+  - Alice: vlCVX = 1000, delegates to Dave
+  - Bob: vlCVX = 500, delegates to Dave
 
-  delegation.balanceAtEpochOf(Bob, epoch) = 1000   (Alice's delegation to Bob)
-  delegation.balanceAtEpochOf(Eve, epoch) = 2000   (Bob's delegation to Eve)
-  delegation.userWeightAtEpochOf(Alice, epoch) = 1000
-  delegation.userWeightAtEpochOf(Bob, epoch) = 2000
+  delegation.balanceAtEpochOf(Dave, epoch) = 1500
 
-1. Alice votes:
-   _ensureUserInfo(Alice):
-     baseWeight = 1000, delegate = Bob
-     adjustedWeight += delegation.balanceAtEpochOf(Alice, epoch) = 0
+1. Dave votes:
+   _initBaseInfo(Dave):
+     baseWeight = 0, delegate = Dave (self)
+     adjustedWeight += 1500
+   Dave: baseWeight=0, adjustedWeight=1500
+   userWeight = 0 + 1500 = 1500 ✓ (votes with delegated weight)
+
+2. Alice votes:
+   _initBaseInfo(Alice):
+     baseWeight = 1000, delegate = Dave
+     adjustedWeight += 0
      
-     _ensureUserInfo(Bob):
-       baseWeight = 2000, delegate = Eve
-       adjustedWeight += delegation.balanceAtEpochOf(Bob, epoch) = 1000
-       Bob: baseWeight=2000, adjustedWeight=1000
-       
-       _ensureUserInfo(Eve):
-         baseWeight = 3000, delegate = Eve (self)
-         adjustedWeight += delegation.balanceAtEpochOf(Eve, epoch) = 2000
-         Eve: baseWeight=3000, adjustedWeight=2000
-       
-       delegatedWeight = delegation.userWeightAtEpochOf(Bob, epoch) = 2000
-       Eve.adjustedWeight -= 2000 → Eve.adjustedWeight = 0
-     
-     delegatedWeight = delegation.userWeightAtEpochOf(Alice, epoch) = 1000
-     Bob.adjustedWeight -= 1000 → Bob.adjustedWeight = 0
+     Delegate removal:
+       weightToRemove = 1000
+       Dave already voted:
+         old delegateTotal = 0 + 1500 = 1500
+         new delegateTotal = 1500 - 1000 = 500
+         Adjust Dave's gauge contributions from 1500 to 500
+         voteTotals -= 1000
+       Dave.adjustedWeight -= 1000 → Dave.adjustedWeight = 500
    
    Alice votes with 1000
 
-2. Bob votes:
-   Bob: baseWeight=2000, adjustedWeight=0
-   userWeight = 2000 ✓ (his own weight, Alice claimed)
+3. Dave re-votes:
+   Dave: baseWeight=0, adjustedWeight=500
+   userWeight = 0 + 500 = 500 ✓ (only Bob's remaining delegation)
+```
 
-3. Eve votes:
-   Eve: baseWeight=3000, adjustedWeight=0
-   userWeight = 3000 ✓ (her own weight, Bob claimed)
+## Signer Authorization
+
+### Scenario 6: updateUserWeight before voting (hasUpdated flag)
+
+```
+Delegation state:
+  - Alice: vlCVX = 500, delegates to Bob
+  - Bob:   vlCVX = 2000
+
+  delegation.balanceAtEpochOf(Bob, epoch) = 500
+  delegation.userWeightAtEpochOf(Alice, epoch) = 500
+
+1. Bob votes:
+   _initBaseInfo(Bob):
+     baseWeight = 2000, delegate = Bob (self)
+     adjustedWeight += 500
+   Bob: baseWeight=2000, adjustedWeight=500
+   userWeight = 2000 + 500 = 2500
+   → Bob votes with 2500
+
+2. Alice relocks 200 more CVX. vlCVX now shows Alice = 700.
+   Alice calls updateUserWeight():
+   
+   hasUpdated == false ✓
+   diff = vlCVX.balanceAtEpochOf(epoch, Alice) - delegation.userWeightAtEpochOf(epoch, Alice)
+        = 700 - 500 = 200
+   
+   hasUpdated = true
+   
+   Delegate Bob processing:
+     Bob already voted:
+       old delegateTotal = 2000 + 500 = 2500
+       new delegateTotal = 2500 + 200 = 2700
+       Adjust Bob's gauge contributions from 2500 to 2700
+       voteTotals += 200
+     Bob.adjustedWeight += 200 → Bob.adjustedWeight = 700
+
+3. Alice later votes herself:
+   _initBaseInfo(Alice):
+     baseWeight = 700 (fresh from vlCVX), delegate = Bob
+     adjustedWeight += 0
+     
+     hasUpdated == true:
+       weightToRemove = baseWeight = 700
+     
+     Bob already voted:
+       old delegateTotal = 2000 + 700 = 2700
+       new delegateTotal = 2700 - 700 = 2000
+       Adjust Bob's gauge contributions from 2700 to 2000
+       voteTotals -= 700
+     Bob.adjustedWeight -= 700 → Bob.adjustedWeight = 0
+   
+   Alice votes with 700 ✓
+
+4. Bob re-votes:
+   Bob: baseWeight=2000, adjustedWeight=0
+   userWeight = 2000 ✓ (only his own)
+
+Final totals: Alice 700 + Bob 2000 = 2700 ✓
+
+Without hasUpdated flag, step 3 would have removed delegation weight (500)
+instead of baseWeight (700), leaving Bob.adjustedWeight = 200 (wrong).
+```
+
+### Scenario 7: updateUserWeight after voting (already voted)
+
+```
+Note: updateUserWeight can only be called when hasUpdated == false.
+Once a user has voted, their delegate was already adjusted during _initBaseInfo,
+so there is no "update before vote" path. The user's weight is directly on gauges.
+
+For post-vote weight changes, the user can re-vote (which uses the weight
+from _initBaseInfo, already set). There is no separate updateUserWeight path
+for already-voted users in this design.
 ```
 
 ## Signer Authorization
@@ -325,9 +448,9 @@ Delegation state:
 
 ## Known Issues / Items for Review
 
-1. **`updateUserWeight` only handles weight increases**: vlCVX balances can decrease (lock expiry, relock with reduced amount), but `updateUserWeight` returns early if `newBaseWeight <= currentWeight`. Decreases are not handled, which could leave stale weights in the system for pre-voted users.
+1. **`updateUserWeight` only handles weight increases**: vlCVX balances can decrease (lock expiry, relock with reduced amount), but `updateUserWeight` returns early if `diff <= 0`. Decreases are not handled, which could leave stale weights in the system.
 
-2. **Re-voting does not refresh base weight**: When a user changes their vote (vote status already > 0), the `_vote` function does not re-read base weight from vlCVX. The weight used was set at first `_ensureUserInfo` call or last `updateUserWeight`. Only a new `_ensureUserInfo` call (which doesn't happen for re-votes) would pick up changes.
+2. **Re-voting does not refresh base weight**: When a user changes their vote (vote status already > 0), the `_vote` function does not re-read base weight from vlCVX. The weight used was set at first `_initBaseInfo` call or last `updateUserWeight`. Only a new `_initBaseInfo` call (which doesn't happen for re-votes) would pick up changes.
 
 3. **No delegation change handling during proposal**: If a user changes their delegation in the Delegation contract mid-proposal, the delegate stored in `userInfo` for this proposal will be stale. The proposal snapshots the delegate at the proposal epoch.
 
@@ -336,5 +459,3 @@ Delegation state:
 5. **Gauge totals use uint256**: `gaugeTotals` is `uint256` but `_changeGaugeTotal` applies signed deltas. If delegations cause the math to go negative, subtraction from `gaugeTotals` will revert.
 
 6. **Truncation mismatch**: The Delegation contract truncates weights to `uint32` (divides by `1e17`, multiplies back). This means there can be up to `1e17 - 1` wei of rounding error per user per epoch. Across many users, these rounding errors accumulate. The contract uses Delegation's truncated values for delegatee subtraction to stay consistent with Delegation's own accounting.
-
-7. **Recursive _ensureUserInfo**: If a user delegates to A, who delegates to B, who delegates to C, etc., `_ensureUserInfo` is called recursively. Very deep delegation chains could hit the stack limit. In practice this is unlikely (1-2 levels max) but there is no explicit guard.
