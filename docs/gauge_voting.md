@@ -108,13 +108,26 @@ Called by the user directly or by their registered surrogate.
 If the user has already voted (`voteStatus > 0`):
 1. Calculate `userWeight = int256(baseWeight) + adjustedWeight`
 2. Subtract the old vote allocation from gauge totals: for each gauge, remove `weight[i] * userWeight / 10000`
-3. Delete old vote data
-4. Proceed with new vote
+3. Proceed to weight refresh and new vote (below)
+
+**Weight refresh (applies to both first vote and re-vote):**
+
+After removing old votes (if any), `_vote` checks the current vlCVX balance:
+1. Read `currentBalance = vlCVX.balanceAtEpochOf(epoch, user)`
+2. If `currentBalance != userInfo.baseWeight`:
+   - Compute `weightDiff = currentBalance - baseWeight`
+   - Update `baseWeight = currentBalance`
+   - Recompute `userWeight = currentBalance + adjustedWeight`
+   - If this is a re-vote (`voteStatus > 0`): adjust `voteTotals` by `weightDiff`
+   - Emit `UserWeightChange`
+3. Verify `userWeight > 0`
+
+This means any user can update their weight simply by calling `vote()` again with the same or different gauge choices. No separate `updateUserWeight` call needed after voting.
 
 **New vote (first vote):**
 
 1. `_initBaseInfo` to initialize (this also handles delegate weight removal)
-2. Verify `userWeight > 0` (effective weight must be positive)
+2. Weight refresh (as above)
 3. Record gauge allocations: for each gauge, add `weight[i] * userWeight / 10000` to `gaugeTotals`
 4. Set `voteStatus` to `Voted` (direct) or `VotedViaSurrogate` (surrogate)
 5. Add user to `votedUsers` array
@@ -122,13 +135,14 @@ If the user has already voted (`voteStatus > 0`):
 
 ### updateUserWeight(_account)
 
-Called to push a weight difference to the delegate before voting. Can only be called once (`hasUpdated` must be false). Does NOT call `_initBaseInfo` — reads from Delegation and vlCVX directly.
+Called to push a weight difference to the delegate **before voting**. Can only be called when the user has NOT voted yet (`voteStatus == 0`) and has not already been updated (`hasUpdated == false`). Does NOT call `_initBaseInfo` — reads from Delegation and vlCVX directly.
 
-1. Require `hasUpdated == false`
-2. Compute `diff = vlCVX.balanceAtEpochOf(epoch, user) - delegation.userWeightAtEpochOf(epoch, user)`
-3. If `diff == 0`, return (no change)
-4. Set `hasUpdated = true`
-5. If the user has a real delegate (read from Delegation):
+1. Require `voteStatus == 0` (not voted)
+2. Require `hasUpdated == false`
+3. Compute `diff = vlCVX.balanceAtEpochOf(epoch, user) - delegation.userWeightAtEpochOf(epoch, user)`
+4. If `diff == 0`, return (no change)
+5. Set `hasUpdated = true`
+6. If the user has a real delegate (read from Delegation):
    - If the delegate has already voted, recalculate the delegate's gauge contributions with `(delegateTotalWeight + diff)` and apply delta to `gaugeTotals` and `voteTotals`
    - `delegate.adjustedWeight += diff`
 
@@ -140,6 +154,8 @@ When `updateUserWeight` adds the diff to the delegate's `adjustedWeight`, the de
 - `hasUpdated == true`: removes `baseWeight` (the full vlCVX value) from the delegate, since the diff was already applied to the delegate
 
 This ensures the delegate's adjustedWeight ends up correct regardless of whether `updateUserWeight` was called.
+
+**Note:** If a user has already voted, they should simply call `vote()` again to update their weight and gauge allocations. The weight refresh in `_vote` handles this automatically.
 
 ## Weight Calculation Examples
 
@@ -418,16 +434,36 @@ Without hasUpdated flag, step 3 would have removed delegation weight (500)
 instead of baseWeight (700), leaving Bob.adjustedWeight = 200 (wrong).
 ```
 
-### Scenario 7: updateUserWeight after voting (already voted)
+### Scenario 7: Re-voting with weight change (auto-refresh)
 
 ```
-Note: updateUserWeight can only be called when hasUpdated == false.
-Once a user has voted, their delegate was already adjusted during _initBaseInfo,
-so there is no "update before vote" path. The user's weight is directly on gauges.
+vlCVX state:
+  - Alice: vlCVX = 500 at proposal epoch, now 700 after relocking
 
-For post-vote weight changes, the user can re-vote (which uses the weight
-from _initBaseInfo, already set). There is no separate updateUserWeight path
-for already-voted users in this design.
+1. Alice votes with baseWeight=500:
+   _initBaseInfo: baseWeight=500
+   userWeight = 500
+   → Alice votes, gauges recorded with weight 500
+
+2. Alice relocks. vlCVX now shows 700.
+
+3. Alice calls vote() again (same or different gauges):
+   _initBaseInfo → returns early (already initialized)
+   userWeight = 500 (from stored baseWeight)
+   
+   Remove old votes with userWeight=500 ✓
+   
+   Weight refresh:
+     currentBalance = vlCVX.balanceAtEpochOf() = 700
+     700 != 500:
+       weightDiff = 700 - 500 = 200
+       baseWeight = 700
+       userWeight = 700
+       voteTotals += 200 (re-vote adjustment)
+   
+   Add new votes with userWeight=700 ✓
+
+No separate updateUserWeight needed — just re-vote.
 ```
 
 ## Signer Authorization
