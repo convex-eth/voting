@@ -482,16 +482,16 @@ No separate updateUserWeight needed — just re-vote.
 - Operators can force-end an active proposal by zeroing `startTime`, `endTime`, and `epoch`
 - This effectively disables voting but preserves existing data in `gaugeTotals` and `voteTotals`
 
-## Known Issues / Items for Review
+## Design Notes
 
-1. **`updateUserWeight` only handles weight increases**: vlCVX balances can decrease (lock expiry, relock with reduced amount), but `updateUserWeight` returns early if `diff <= 0`. Decreases are not handled, which could leave stale weights in the system.
+1. **`updateUserWeight` only handles weight increases**: vlCVX balances only increase — locks cannot be partially unlocked, and relocking only adds weight. Weight decreases (from lock expiry) only affect future epochs, not the current one. Since proposals snapshot the current epoch, decreases are not a concern.
 
-2. **Re-voting does not refresh base weight**: When a user changes their vote (vote status already > 0), the `_vote` function does not re-read base weight from vlCVX. The weight used was set at first `_initBaseInfo` call or last `updateUserWeight`. Only a new `_initBaseInfo` call (which doesn't happen for re-votes) would pick up changes.
+2. **Re-voting refreshes base weight**: `_vote` reads `vlCVX.balanceAtEpochOf()` after removing old votes and before adding new ones. A user wanting updated weight simply calls `vote()` again.
 
-3. **No delegation change handling during proposal**: If a user changes their delegation in the Delegation contract mid-proposal, the delegate stored in `userInfo` for this proposal will be stale. The proposal snapshots the delegate at the proposal epoch.
+3. **Delegation changes only affect future epochs**: The Delegation contract writes changes starting at `epochCount() - 1` (the next epoch). Any delegation change mid-proposal has no effect on the current epoch's weights. The proposal's epoch is fixed at creation.
 
-4. **`voteTotals` is uint256**: When `adjustedWeight` is negative, adding `userWeight` (which can be negative) to `voteTotals` could underflow. Current code does `voteTotals += uint256(userWeight)` which would revert on underflow in Solidity >=0.8.
+4. **`adjustedWeight` is always non-negative**: While a delegate's `adjustedWeight` can temporarily go negative when a delegatee votes first, it always nets back to `>= 0` when the delegate's `_initBaseInfo` runs and adds `delegation.balanceAtEpochOf()`. This means `voteTotals` and `gaugeTotals` (both `uint256`) will never underflow from signed arithmetic.
 
-5. **Gauge totals use uint256**: `gaugeTotals` is `uint256` but `_changeGaugeTotal` applies signed deltas. If delegations cause the math to go negative, subtraction from `gaugeTotals` will revert.
+5. **Gauge totals are always non-negative**: Since `adjustedWeight` is always `>= 0` and `baseWeight >= 0`, effective voting weights are always positive. Signed deltas applied via `_changeGaugeTotal` will never cause `gaugeTotals` to go negative.
 
-6. **Truncation mismatch**: The Delegation contract truncates weights to `uint32` (divides by `1e17`, multiplies back). This means there can be up to `1e17 - 1` wei of rounding error per user per epoch. Across many users, these rounding errors accumulate. The contract uses Delegation's truncated values for delegatee subtraction to stay consistent with Delegation's own accounting.
+6. **Truncation mismatch**: The Delegation contract truncates weights to `uint32` (divides by `1e17`, multiplies back), introducing up to `1e17 - 1` wei of rounding error per user per epoch. This means a user voting for themselves directly (using raw vlCVX weight) will have slightly higher effective weight than their delegatee weight through the Delegation contract. This is an acceptable trade-off for on-chain gas efficiency.
