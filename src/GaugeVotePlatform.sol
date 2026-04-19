@@ -165,16 +165,12 @@ contract GaugeVotePlatform{
         uint256 epoch = proposals[proposalId].epoch;
         uint256 currentBalance = _getBaseWeight(_account, epoch);
         if (currentBalance != userInfo[proposalId][_account].baseWeight) {
-            int256 weightDiff = int256(currentBalance) - int256(userInfo[proposalId][_account].baseWeight);
+            uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
             userInfo[proposalId][_account].baseWeight = currentBalance;
             userWeight = int256(currentBalance) + userInfo[proposalId][_account].adjustedWeight;
 
             if (userInfo[proposalId][_account].voteStatus > 0) {
-                if (weightDiff > 0) {
-                    voteTotals[proposalId] += uint256(weightDiff);
-                } else {
-                    voteTotals[proposalId] -= uint256(-weightDiff);
-                }
+                voteTotals[proposalId] += currentBalance - oldBaseWeight;
             }
 
             emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
@@ -265,11 +261,7 @@ contract GaugeVotePlatform{
                     int256 newContribution = int256(votes[proposalId][delegate].weights[i]) * (delegateTotalWeight + diff) / int256(max_weight);
                     _changeGaugeTotal(proposalId, votes[proposalId][delegate].gauges[i], newContribution - oldContribution);
                 }
-                if (diff > 0) {
-                    voteTotals[proposalId] += uint256(diff);
-                } else {
-                    voteTotals[proposalId] -= uint256(-diff);
-                }
+                voteTotals[proposalId] += uint256(diff);
             }
 
             userInfo[proposalId][delegate].adjustedWeight += diff;
