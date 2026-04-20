@@ -156,19 +156,15 @@ contract GaugeVotePlatform{
                 int256 delegateTotalWeight = int256(userInfo[_proposalId][delegate].baseWeight) + userInfo[_proposalId][delegate].adjustedWeight;
                 GaugeVote[] storage delegateVotes = votes[_proposalId][delegate];
                 uint256 len = delegateVotes.length;
-                address[] memory changedGauges = new address[](len);
-                uint256[] memory newTotals = new uint256[](len);
 
                 for (uint256 i = 0; i < len;) {
                     int256 oldContribution = int256(uint256(delegateVotes[i].weight)) * delegateTotalWeight / int256(max_weight);
                     int256 newContribution = int256(uint256(delegateVotes[i].weight)) * (delegateTotalWeight - weightToRemove) / int256(max_weight);
                     _changeGaugeTotal(_proposalId, delegateVotes[i].gauge, newContribution - oldContribution);
-                    changedGauges[i] = delegateVotes[i].gauge;
-                    newTotals[i] = _readGaugeTotal(_proposalId, delegateVotes[i].gauge);
                     unchecked { ++i; }
                 }
 
-                emit GaugeTotalsChanged(_proposalId, changedGauges, newTotals);
+                emit GaugeWeightsUpdated(_proposalId, delegate);
                 voteTotals[_proposalId] -= uint256(weightToRemove);
             }
 
@@ -196,15 +192,10 @@ contract GaugeVotePlatform{
         GaugeVote[] storage oldVotes = votes[proposalId][_account];
         if(userInfo[proposalId][_account].voteStatus > 0){
             uint256 oldLen = oldVotes.length;
-            address[] memory oldGauges = new address[](oldLen);
-            uint256[] memory oldTotals = new uint256[](oldLen);
             for(uint256 i = 0; i < oldLen;) {
                 _changeGaugeTotal(proposalId, oldVotes[i].gauge, -(int256(uint256(oldVotes[i].weight))*userWeight/int256(max_weight)) );
-                oldGauges[i] = oldVotes[i].gauge;
-                oldTotals[i] = _readGaugeTotal(proposalId, oldVotes[i].gauge);
                 unchecked { ++i; }
             }
-            if (oldLen > 0) emit GaugeTotalsChanged(proposalId, oldGauges, oldTotals);
         }
 
         uint256 epoch = proposals[proposalId].epoch;
@@ -233,14 +224,10 @@ contract GaugeVotePlatform{
         }
         require(totalweight <= max_weight, "max weight");
 
-        address[] memory newGauges = new address[](_weights.length);
-        uint256[] memory newTotals = new uint256[](_weights.length);
         for(uint256 i = 0; i < _weights.length; i++) {
             _changeGaugeTotal(proposalId,_gauges[i], int256(_weights[i])*userWeight/int256(max_weight) );
-            newGauges[i] = _gauges[i];
-            newTotals[i] = _readGaugeTotal(proposalId, _gauges[i]);
         }
-        emit GaugeTotalsChanged(proposalId, newGauges, newTotals);
+        emit GaugeWeightsUpdated(proposalId, _account);
         emit VoteCast(proposalId, _account, _gauges, _weights);
 
         if(userInfo[proposalId][_account].voteStatus == 0){
@@ -344,17 +331,13 @@ contract GaugeVotePlatform{
                 int256 delegateTotalWeight = int256(userInfo[proposalId][delegate].baseWeight) + userInfo[proposalId][delegate].adjustedWeight;
                 GaugeVote[] storage delegateVotes = votes[proposalId][delegate];
                 uint256 len = delegateVotes.length;
-                address[] memory changedGauges = new address[](len);
-                uint256[] memory newTotals = new uint256[](len);
                 for (uint256 i = 0; i < len;) {
                     int256 oldContribution = int256(uint256(delegateVotes[i].weight)) * delegateTotalWeight / int256(max_weight);
                     int256 newContribution = int256(uint256(delegateVotes[i].weight)) * (delegateTotalWeight + diff) / int256(max_weight);
                     _changeGaugeTotal(proposalId, delegateVotes[i].gauge, newContribution - oldContribution);
-                    changedGauges[i] = delegateVotes[i].gauge;
-                    newTotals[i] = _readGaugeTotal(proposalId, delegateVotes[i].gauge);
                     unchecked { ++i; }
                 }
-                if (len > 0) emit GaugeTotalsChanged(proposalId, changedGauges, newTotals);
+                emit GaugeWeightsUpdated(proposalId, delegate);
                 voteTotals[proposalId] += uint256(diff);
             }
 
@@ -436,7 +419,7 @@ contract GaugeVotePlatform{
     event NewProposal(uint256 indexed id, uint256 start, uint256 end);
     event ForceEndProposal(uint256 indexed id);
     event UserWeightChange(uint256 indexed pid, address indexed user, uint256 baseWeight, int256 adjustedWeight);
-    event GaugeTotalsChanged(uint256 indexed pid, address[] gauges, uint256[] newTotals);
+    event GaugeWeightsUpdated(uint256 indexed pid, address indexed user);
     event TransferOwnership(address pendingOwner);
     event AcceptedOwnership(address newOwner);
     event OperatorSet(address indexed op, bool active);
