@@ -286,8 +286,13 @@ contract GaugeVotePlatform{
         }
     }
 
+    function isFinalized(uint256 _proposalId) public view returns (bool) {
+        return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime + overtime;
+    }
+
     function updateUserWeight(address _account) external onlyAcceptedSigner(_account){
         uint256 proposalId = proposals.length - 1;
+        require(block.timestamp <= proposals[proposalId].endTime, "!end");
         require(userInfo[proposalId][_account].voteStatus == 0, "already voted");
         require(!userInfo[proposalId][_account].hasUpdated, "already updated");
 

@@ -884,4 +884,69 @@ contract GaugeVotePlatformTest is Test {
         assertEq(platform.getGaugeCount(pid2), 0);
         assertEq(platform.gaugeTotal(pid2, address(gauge1)), 0);
     }
+
+    // ========== updateUserWeight time gate ==========
+
+    function test_updateUserWeightCannotCallAfterEndTime() public {
+        _lockAndDelegate(alice, 500, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+
+        mockVlCVX.mockRelock(alice, 0, 700 * WD);
+
+        uint256 pid = _createProposal();
+
+        (, uint256 endTime,) = platform.proposals(pid);
+        vm.warp(endTime + 1);
+
+        vm.prank(alice);
+        vm.expectRevert(bytes("!end"));
+        platform.updateUserWeight(alice);
+    }
+
+    function test_updateUserWeightCanCallBeforeEndTime() public {
+        _lockAndDelegate(alice, 500, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+
+        mockVlCVX.mockRelock(alice, 0, 700 * WD);
+
+        uint256 pid = _createProposal();
+
+        (, uint256 endTime,) = platform.proposals(pid);
+        vm.warp(endTime - 1);
+
+        vm.prank(alice);
+        platform.updateUserWeight(alice);
+    }
+
+    // ========== isFinalized ==========
+
+    function test_isFinalized() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        assertFalse(platform.isFinalized(pid));
+
+        (, uint256 endTime,) = platform.proposals(pid);
+
+        vm.warp(endTime + 5 minutes);
+        assertFalse(platform.isFinalized(pid));
+
+        vm.warp(endTime + 10 minutes + 1);
+        assertTrue(platform.isFinalized(pid));
+    }
+
+    function test_isFinalized_forceEnded() public {
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        assertFalse(platform.isFinalized(pid));
+
+        vm.prank(operator);
+        platform.forceEndProposal();
+
+        assertFalse(platform.isFinalized(pid));
+    }
 }
