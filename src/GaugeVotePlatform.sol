@@ -6,8 +6,7 @@ import "./SurrogateRegistry.sol";
 import "./Delegation.sol";
 import "./interface/IvlCVX.sol";
 
-
-contract GaugeVotePlatform{
+contract GaugeVotePlatform {
 
     address public owner;
     address public pendingowner;
@@ -20,18 +19,18 @@ contract GaugeVotePlatform{
 
     uint256 public constant epochDuration = 86400 * 7;
 
-    enum VoteStatus{
+    enum VoteStatus {
         None,
         VotedViaSurrogate,
         Voted
     }
 
     struct UserInfo {
-        uint256 baseWeight;
-        int256 adjustedWeight;
-        address delegate;
+        uint96 baseWeight;
+        int96 adjustedWeight;
         uint8 voteStatus;
         bool hasUpdated;
+        address delegate;
     }
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     mapping(uint256 => address[]) public votedUsers;
@@ -64,32 +63,32 @@ contract GaugeVotePlatform{
     uint256 public constant overtime = 10 minutes;
 
     function currentEpoch() public view returns (uint256) {
-        return block.timestamp/epochDuration*epochDuration;
+        return block.timestamp / epochDuration * epochDuration;
     }
 
-    function proposalCount() external view returns(uint256){
+    function proposalCount() external view returns (uint256) {
         return proposals.length;
     }
 
-    function getVoterCount(uint256 _proposalId) external view returns(uint256){
+    function getVoterCount(uint256 _proposalId) external view returns (uint256) {
         return votedUsers[_proposalId].length;
     }
 
-    function getVoterAtIndex(uint256 _proposalId, uint256 _index) external view returns(address){
+    function getVoterAtIndex(uint256 _proposalId, uint256 _index) external view returns (address) {
         return votedUsers[_proposalId][_index];
     }
 
-    function gaugeTotal(uint256 _proposalId, address _gauge) external view returns(uint256){
+    function gaugeTotal(uint256 _proposalId, address _gauge) external view returns (uint256) {
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         if (idx == 0) return 0;
         return _gaugeEntries[_proposalId][idx - 1].totalWeight;
     }
 
-    function getGaugeCount(uint256 _proposalId) external view returns(uint256){
+    function getGaugeCount(uint256 _proposalId) external view returns (uint256) {
         return _gaugeEntries[_proposalId].length;
     }
 
-    function getGaugeEntry(uint256 _proposalId, uint256 _index) external view returns(address gauge, uint256 totalWeight){
+    function getGaugeEntry(uint256 _proposalId, uint256 _index) external view returns (address gauge, uint256 totalWeight) {
         GaugeTotalEntry storage entry = _gaugeEntries[_proposalId][_index];
         gauge = entry.gauge;
         totalWeight = entry.totalWeight;
@@ -138,9 +137,9 @@ contract GaugeVotePlatform{
             delegate = _account;
         }
 
-        userInfo[_proposalId][_account].baseWeight = baseWeight;
+        userInfo[_proposalId][_account].baseWeight = uint96(baseWeight);
         userInfo[_proposalId][_account].delegate = delegate;
-        userInfo[_proposalId][_account].adjustedWeight += int256(_getDelegateTotalWeight(_account, epoch));
+        userInfo[_proposalId][_account].adjustedWeight += int96(int256(_getDelegateTotalWeight(_account, epoch)));
 
         emit UserWeightChange(_proposalId, _account, baseWeight, userInfo[_proposalId][_account].adjustedWeight);
 
@@ -153,7 +152,7 @@ contract GaugeVotePlatform{
             }
 
             if (userInfo[_proposalId][delegate].voteStatus > 0) {
-                int256 delegateTotalWeight = int256(userInfo[_proposalId][delegate].baseWeight) + userInfo[_proposalId][delegate].adjustedWeight;
+                int256 delegateTotalWeight = int256(uint256(userInfo[_proposalId][delegate].baseWeight)) + int256(userInfo[_proposalId][delegate].adjustedWeight);
                 GaugeVote[] storage delegateVotes = votes[_proposalId][delegate];
                 uint256 len = delegateVotes.length;
 
@@ -168,7 +167,7 @@ contract GaugeVotePlatform{
                 voteTotals[_proposalId] -= uint256(weightToRemove);
             }
 
-            userInfo[_proposalId][delegate].adjustedWeight -= weightToRemove;
+            userInfo[_proposalId][delegate].adjustedWeight -= int96(weightToRemove);
             emit UserWeightChange(_proposalId, delegate, userInfo[_proposalId][delegate].baseWeight, userInfo[_proposalId][delegate].adjustedWeight);
         }
     }
@@ -176,32 +175,32 @@ contract GaugeVotePlatform{
     function _vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) internal {
         uint256 proposalId = proposals.length - 1;
         require(block.timestamp >= proposals[proposalId].startTime, "!start");
-        if(equalizerAccounts[_account]){
+        if (equalizerAccounts[_account]) {
             require(block.timestamp <= proposals[proposalId].endTime + overtime, "!end");
-        }else{
+        } else {
             require(block.timestamp <= proposals[proposalId].endTime, "!end");
         }
         require(_gauges.length == _weights.length, "mismatch");
 
         _initBaseInfo(_account, proposalId);
 
-        int256 userbase = int256(userInfo[proposalId][_account].baseWeight);
-        int256 userWeight = userbase + userInfo[proposalId][_account].adjustedWeight;
+        int256 userbase = int256(uint256(userInfo[proposalId][_account].baseWeight));
+        int256 userWeight = userbase + int256(userInfo[proposalId][_account].adjustedWeight);
         require(userWeight > 0, "!weight");
 
-        if(userInfo[proposalId][_account].voteStatus > 0){
+        if (userInfo[proposalId][_account].voteStatus > 0) {
             GaugeVote[] storage oldVotes = votes[proposalId][_account];
             uint256 oldLen = oldVotes.length;
-            for(uint256 i = 0; i < oldLen;) {
-                _changeGaugeTotal(proposalId, oldVotes[i].gauge, -(int256(uint256(oldVotes[i].weight))*userWeight/int256(max_weight)) );
+            for (uint256 i = 0; i < oldLen;) {
+                _changeGaugeTotal(proposalId, oldVotes[i].gauge, -(int256(uint256(oldVotes[i].weight)) * userWeight / int256(max_weight)));
                 unchecked { ++i; }
             }
 
             uint256 currentBalance = _getBaseWeight(_account, proposals[proposalId].epoch);
-            if (currentBalance != userInfo[proposalId][_account].baseWeight) {
+            if (currentBalance != uint256(userInfo[proposalId][_account].baseWeight)) {
                 uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
-                userInfo[proposalId][_account].baseWeight = currentBalance;
-                userWeight = int256(currentBalance) + userInfo[proposalId][_account].adjustedWeight;
+                userInfo[proposalId][_account].baseWeight = uint96(currentBalance);
+                userWeight = int256(currentBalance) + int256(userInfo[proposalId][_account].adjustedWeight);
                 voteTotals[proposalId] += currentBalance - oldBaseWeight;
                 emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
             }
@@ -211,28 +210,28 @@ contract GaugeVotePlatform{
 
         delete votes[proposalId][_account];
         uint256 totalweight;
-        for(uint256 i = 0; i < _weights.length; i++) {
+        for (uint256 i = 0; i < _weights.length; i++) {
             require(_weights[i] > 0, "!weight");
-            require(gaugeRegistry.isRegisteredGauge(_gauges[i]),"!gauge");
+            require(gaugeRegistry.isRegisteredGauge(_gauges[i]), "!gauge");
             votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint16(_weights[i])}));
             totalweight += _weights[i];
         }
         require(totalweight <= max_weight, "max weight");
 
-        for(uint256 i = 0; i < _weights.length; i++) {
-            _changeGaugeTotal(proposalId,_gauges[i], int256(_weights[i])*userWeight/int256(max_weight) );
+        for (uint256 i = 0; i < _weights.length; i++) {
+            _changeGaugeTotal(proposalId, _gauges[i], int256(_weights[i]) * userWeight / int256(max_weight));
         }
         emit GaugeWeightsUpdated(proposalId, _account);
         emit VoteCast(proposalId, _account, _gauges, _weights);
 
-        if(userInfo[proposalId][_account].voteStatus == 0){
+        if (userInfo[proposalId][_account].voteStatus == 0) {
             userInfo[proposalId][_account].voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
             votedUsers[proposalId].push(_account);
             voteTotals[proposalId] += uint256(userWeight);
         }
     }
 
-    function _changeGaugeTotal(uint256 _proposalId, address _gauge, int256 _changeValue) internal{
+    function _changeGaugeTotal(uint256 _proposalId, address _gauge, int256 _changeValue) internal {
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         uint256 absVal;
         unchecked {
@@ -269,29 +268,29 @@ contract GaugeVotePlatform{
         }
     }
 
-    function _readGaugeTotal(uint256 _proposalId, address _gauge) internal view returns(uint256){
+    function _readGaugeTotal(uint256 _proposalId, address _gauge) internal view returns (uint256) {
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         if (idx == 0) return 0;
         return _gaugeEntries[_proposalId][idx - 1].totalWeight;
     }
 
-    function _canSign(address _account) internal view returns(bool){
-        if(msg.sender == _account){
+    function _canSign(address _account) internal view returns (bool) {
+        if (msg.sender == _account) {
             return true;
         }
-        if(surrogateRegistry.isSurrogate(msg.sender, _account)){
+        if (surrogateRegistry.isSurrogate(msg.sender, _account)) {
             return true;
         }
         return false;
     }
 
-    function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account){
+    function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
         require(msg.sender == _account || userInfo[proposalId][_account].voteStatus <= uint8(VoteStatus.VotedViaSurrogate), "!voteAuth");
 
         _vote(_account, _gauges, _weights);
 
-        if(userInfo[proposalId][_account].voteStatus <= uint8(VoteStatus.VotedViaSurrogate) && msg.sender == _account){
+        if (userInfo[proposalId][_account].voteStatus <= uint8(VoteStatus.VotedViaSurrogate) && msg.sender == _account) {
             userInfo[proposalId][_account].voteStatus = uint8(VoteStatus.Voted);
         }
     }
@@ -300,7 +299,7 @@ contract GaugeVotePlatform{
         return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime + overtime;
     }
 
-    function updateUserWeight(address _account) external onlyAcceptedSigner(_account){
+    function updateUserWeight(address _account) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
         require(block.timestamp <= proposals[proposalId].endTime, "!end");
         require(userInfo[proposalId][_account].voteStatus == 0, "already voted");
@@ -323,7 +322,7 @@ contract GaugeVotePlatform{
 
         if (delegate != _account) {
             if (userInfo[proposalId][delegate].voteStatus > 0) {
-                int256 delegateTotalWeight = int256(userInfo[proposalId][delegate].baseWeight) + userInfo[proposalId][delegate].adjustedWeight;
+                int256 delegateTotalWeight = int256(uint256(userInfo[proposalId][delegate].baseWeight)) + int256(userInfo[proposalId][delegate].adjustedWeight);
                 GaugeVote[] storage delegateVotes = votes[proposalId][delegate];
                 uint256 len = delegateVotes.length;
                 for (uint256 i = 0; i < len;) {
@@ -336,15 +335,15 @@ contract GaugeVotePlatform{
                 voteTotals[proposalId] += uint256(diff);
             }
 
-            userInfo[proposalId][delegate].adjustedWeight += diff;
+            userInfo[proposalId][delegate].adjustedWeight += int96(diff);
             emit UserWeightChange(proposalId, delegate, userInfo[proposalId][delegate].baseWeight, userInfo[proposalId][delegate].adjustedWeight);
         }
     }
 
     function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {
         uint256 pCnt = proposals.length;
-        if(pCnt > 0){
-            require(block.timestamp > proposals[pCnt-1].endTime + overtime, "!prev_end");
+        if (pCnt > 0) {
+            require(block.timestamp > proposals[pCnt - 1].endTime + overtime, "!prev_end");
         }
 
         require(_endTime > _startTime, "!time");
@@ -359,7 +358,7 @@ contract GaugeVotePlatform{
             endTime: _endTime,
             epoch: epoch
         }));
-        emit NewProposal(proposals.length-1, _startTime, _endTime);
+        emit NewProposal(proposals.length - 1, _startTime, _endTime);
     }
 
     function forceEndProposal() public onlyOperator {
@@ -373,7 +372,7 @@ contract GaugeVotePlatform{
         emit ForceEndProposal(proposalId);
     }
 
-    function transferOwnership(address _owner) external onlyOwner{
+    function transferOwnership(address _owner) external onlyOwner {
         pendingowner = _owner;
         emit TransferOwnership(_owner);
     }
@@ -385,12 +384,12 @@ contract GaugeVotePlatform{
         emit AcceptedOwnership(owner);
     }
 
-    function setOperator(address _op, bool _active) external onlyOwner{
+    function setOperator(address _op, bool _active) external onlyOwner {
         operators[_op] = _active;
         emit OperatorSet(_op, _active);
     }
 
-    function setOvertimeAccount(address _eq, bool _active) external onlyOwner{
+    function setOvertimeAccount(address _eq, bool _active) external onlyOwner {
         equalizerAccounts[_eq] = _active;
         emit EqualizerAccountSet(_eq, _active);
     }

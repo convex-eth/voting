@@ -383,7 +383,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj, address del,,) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del) = platform.userInfo(pid, alice);
         assertEq(bw, 3000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -401,7 +401,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 daveBw, int256 daveAdj, address daveDel,,) = platform.userInfo(pid, dave);
+        (uint256 daveBw, int256 daveAdj,,, address daveDel) = platform.userInfo(pid, dave);
         assertEq(daveBw, 0);
         assertGt(daveAdj, 0);
         assertEq(daveDel, dave);
@@ -428,7 +428,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.updateUserWeight(alice);
 
-        (,,,, bool hasUpdated) = platform.userInfo(pid, alice);
+        (,,, bool hasUpdated,) = platform.userInfo(pid, alice);
         assertTrue(hasUpdated);
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -531,7 +531,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(surrogate);
         platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,,, uint8 vs,) = platform.userInfo(pid, alice);
+        (,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(1));
     }
 
@@ -549,7 +549,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        (,,, uint8 vs,) = platform.userInfo(pid, alice);
+        (,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(2));
     }
 
@@ -719,7 +719,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.updateUserWeight(alice);
 
-        (,,,, bool hasUpdated) = platform.userInfo(pid, alice);
+        (,,, bool hasUpdated,) = platform.userInfo(pid, alice);
         assertTrue(hasUpdated);
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -794,7 +794,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj, address del,,) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del) = platform.userInfo(pid, alice);
         assertEq(bw, 1000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
