@@ -8,6 +8,22 @@ import "./interface/IvlCVX.sol";
 
 contract GaugeVotePlatform {
 
+    error NotStarted();
+    error Ended();
+    error Mismatch();
+    error NoWeight();
+    error NotGauge();
+    error MaxWeight();
+    error PrevNotEnded();
+    error BadTime();
+    error AlreadyVoted();
+    error AlreadyUpdated();
+    error NotVoteAuth();
+    error NotSigner();
+    error NotOwner();
+    error NotOperator();
+    error NotPendingOwner();
+
     address public owner;
     address public pendingowner;
     mapping(address => bool) public operators;
@@ -106,59 +122,46 @@ contract GaugeVotePlatform {
             weights[i] = userVotes[i].weight;
             unchecked { ++i; }
         }
-        voted = userInfo[_proposalId][_user].voteStatus > 0;
-        baseWeight = userInfo[_proposalId][_user].baseWeight;
-        adjustedWeight = userInfo[_proposalId][_user].adjustedWeight;
-    }
-
-    function _getBaseWeight(address _account, uint256 _epoch) internal view returns (uint256) {
-        return vlCVX.balanceAtEpochOf(_epoch, _account);
-    }
-
-    function _getDelegate(address _account, uint256 _epoch) internal view returns (address) {
-        return delegation.getDelegateAtEpoch(_account, _epoch);
-    }
-
-    function _getDelegatedWeight(address _account, uint256 _epoch) internal view returns (uint256) {
-        return delegation.userWeightAtEpochOf(_epoch, _account);
-    }
-
-    function _getDelegateTotalWeight(address _delegate, uint256 _epoch) internal view returns (uint256) {
-        return delegation.balanceAtEpochOf(_epoch, _delegate);
+        UserInfo storage u = userInfo[_proposalId][_user];
+        voted = u.voteStatus > 0;
+        baseWeight = u.baseWeight;
+        adjustedWeight = u.adjustedWeight;
     }
 
     function _initBaseInfo(address _account, uint256 _proposalId) internal {
-        if (userInfo[_proposalId][_account].delegate != address(0)) return;
+        UserInfo storage user = userInfo[_proposalId][_account];
+        if (user.delegate != address(0)) return;
 
         uint256 epoch = proposals[_proposalId].epoch;
 
-        uint256 baseWeight = _getBaseWeight(_account, epoch);
-        address delegate = _getDelegate(_account, epoch);
+        uint256 baseWeight = vlCVX.balanceAtEpochOf(epoch, _account);
+        address delegate = delegation.getDelegateAtEpoch(_account, epoch);
 
         if (delegate == address(0)) {
             delegate = _account;
         }
 
-        userInfo[_proposalId][_account].baseWeight = uint96(baseWeight);
-        userInfo[_proposalId][_account].delegate = delegate;
-        userInfo[_proposalId][_account].adjustedWeight += int96(int256(_getDelegateTotalWeight(_account, epoch)));
+        user.baseWeight = uint96(baseWeight);
+        user.delegate = delegate;
+        user.adjustedWeight += int96(int256(delegation.balanceAtEpochOf(epoch, _account)));
 
-        emit UserWeightChange(_proposalId, _account, baseWeight, userInfo[_proposalId][_account].adjustedWeight);
+        emit UserWeightChange(_proposalId, _account, baseWeight, user.adjustedWeight);
 
         if (delegate != _account) {
             int256 weightToRemove;
-            if (userInfo[_proposalId][_account].hasUpdated) {
+            if (user.hasUpdated) {
                 weightToRemove = int256(baseWeight);
             } else {
-                weightToRemove = int256(_getDelegatedWeight(_account, epoch));
+                weightToRemove = int256(delegation.userWeightAtEpochOf(epoch, _account));
             }
 
+            UserInfo storage del = userInfo[_proposalId][delegate];
             int96 pending = pendingWeightAdjustment[_proposalId][delegate];
             if (pending != 0) {
                 pendingWeightAdjustment[_proposalId][delegate] = 0;
             }
 
-            if (userInfo[_proposalId][delegate].voteStatus > 0) {
+            if (del.voteStatus > 0) {
                 int256 netDelta = int256(pending) - weightToRemove;
 
                 GaugeVote[] storage delegateVotes = votes[_proposalId][delegate];
@@ -173,9 +176,8 @@ contract GaugeVotePlatform {
                 voteTotals[_proposalId] = voteTotals[_proposalId] + uint256(int256(pending)) - uint256(weightToRemove);
             }
 
-            userInfo[_proposalId][delegate].adjustedWeight += pending;
-            userInfo[_proposalId][delegate].adjustedWeight -= int96(weightToRemove);
-            emit UserWeightChange(_proposalId, delegate, userInfo[_proposalId][delegate].baseWeight, userInfo[_proposalId][delegate].adjustedWeight);
+            del.adjustedWeight = del.adjustedWeight + pending - int96(weightToRemove);
+            emit UserWeightChange(_proposalId, delegate, del.baseWeight, del.adjustedWeight);
         }
     }
 
@@ -203,21 +205,22 @@ contract GaugeVotePlatform {
 
     function _vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) internal {
         uint256 proposalId = proposals.length - 1;
-        require(block.timestamp >= proposals[proposalId].startTime, "!start");
+        Proposal storage prop = proposals[proposalId];
+        if (block.timestamp < prop.startTime) revert NotStarted();
         if (equalizerAccounts[_account]) {
-            require(block.timestamp <= proposals[proposalId].endTime + overtime, "!end");
+            if (block.timestamp > prop.endTime + overtime) revert Ended();
         } else {
-            require(block.timestamp <= proposals[proposalId].endTime, "!end");
+            if (block.timestamp > prop.endTime) revert Ended();
         }
-        require(_gauges.length == _weights.length, "mismatch");
+        if (_gauges.length != _weights.length) revert Mismatch();
 
         _initBaseInfo(_account, proposalId);
 
-        int256 userbase = int256(uint256(userInfo[proposalId][_account].baseWeight));
-        int256 userWeight = userbase + int256(userInfo[proposalId][_account].adjustedWeight);
-        require(userWeight > 0, "!weight");
+        UserInfo storage user = userInfo[proposalId][_account];
+        int256 userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
+        if (userWeight <= 0) revert NoWeight();
 
-        if (userInfo[proposalId][_account].voteStatus > 0) {
+        if (user.voteStatus > 0) {
             GaugeVote[] storage oldVotes = votes[proposalId][_account];
             uint256 oldLen = oldVotes.length;
             for (uint256 i = 0; i < oldLen;) {
@@ -225,29 +228,29 @@ contract GaugeVotePlatform {
                 unchecked { ++i; }
             }
 
-            uint256 currentBalance = _getBaseWeight(_account, proposals[proposalId].epoch);
-            if (currentBalance != uint256(userInfo[proposalId][_account].baseWeight)) {
-                uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
-                userInfo[proposalId][_account].baseWeight = uint96(currentBalance);
+            uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
+            if (currentBalance != uint256(user.baseWeight)) {
+                uint256 oldBaseWeight = user.baseWeight;
+                user.baseWeight = uint96(currentBalance);
                 voteTotals[proposalId] += currentBalance - oldBaseWeight;
-                emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
+                emit UserWeightChange(proposalId, _account, currentBalance, user.adjustedWeight);
             }
         }
 
-        _applyPending(proposalId, _account, userInfo[proposalId][_account].voteStatus);
+        _applyPending(proposalId, _account, user.voteStatus);
 
-        userWeight = int256(uint256(userInfo[proposalId][_account].baseWeight)) + int256(userInfo[proposalId][_account].adjustedWeight);
-        require(userWeight > 0, "!weight");
+        userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
+        if (userWeight <= 0) revert NoWeight();
 
         delete votes[proposalId][_account];
         uint256 totalweight;
         for (uint256 i = 0; i < _weights.length; i++) {
-            require(_weights[i] > 0, "!weight");
-            require(gaugeRegistry.isRegisteredGauge(_gauges[i]), "!gauge");
+            if (_weights[i] == 0) revert NoWeight();
+            if (!gaugeRegistry.isRegisteredGauge(_gauges[i])) revert NotGauge();
             votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint16(_weights[i])}));
             totalweight += _weights[i];
         }
-        require(totalweight <= max_weight, "max weight");
+        if (totalweight > max_weight) revert MaxWeight();
 
         for (uint256 i = 0; i < _weights.length; i++) {
             _changeGaugeTotal(proposalId, _gauges[i], int256(_weights[i]) * userWeight / int256(max_weight));
@@ -255,8 +258,8 @@ contract GaugeVotePlatform {
         emit GaugeWeightsUpdated(proposalId, _account);
         emit VoteCast(proposalId, _account, _gauges, _weights);
 
-        if (userInfo[proposalId][_account].voteStatus == 0) {
-            userInfo[proposalId][_account].voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
+        if (user.voteStatus == 0) {
+            user.voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
             votedUsers[proposalId].push(_account);
             voteTotals[proposalId] += uint256(userWeight);
         }
@@ -299,25 +302,9 @@ contract GaugeVotePlatform {
         }
     }
 
-    function _readGaugeTotal(uint256 _proposalId, address _gauge) internal view returns (uint256) {
-        uint256 idx = _gaugeIndex[_proposalId][_gauge];
-        if (idx == 0) return 0;
-        return _gaugeEntries[_proposalId][idx - 1].totalWeight;
-    }
-
-    function _canSign(address _account) internal view returns (bool) {
-        if (msg.sender == _account) {
-            return true;
-        }
-        if (surrogateRegistry.isSurrogate(msg.sender, _account)) {
-            return true;
-        }
-        return false;
-    }
-
     function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
-        require(msg.sender == _account || userInfo[proposalId][_account].voteStatus <= uint8(VoteStatus.VotedViaSurrogate), "!voteAuth");
+        if (msg.sender != _account && userInfo[proposalId][_account].voteStatus > uint8(VoteStatus.VotedViaSurrogate)) revert NotVoteAuth();
 
         _vote(_account, _gauges, _weights);
 
@@ -332,13 +319,13 @@ contract GaugeVotePlatform {
 
     function updateUserWeight(address _account) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
-        require(block.timestamp <= proposals[proposalId].endTime, "!end");
-        require(userInfo[proposalId][_account].voteStatus == 0, "already voted");
-        require(!userInfo[proposalId][_account].hasUpdated, "already updated");
+        if (block.timestamp > proposals[proposalId].endTime) revert Ended();
+        if (userInfo[proposalId][_account].voteStatus != 0) revert AlreadyVoted();
+        if (userInfo[proposalId][_account].hasUpdated) revert AlreadyUpdated();
 
         uint256 epoch = proposals[proposalId].epoch;
-        uint256 currentBalance = _getBaseWeight(_account, epoch);
-        uint256 delegatedWeight = _getDelegatedWeight(_account, epoch);
+        uint256 currentBalance = vlCVX.balanceAtEpochOf(epoch, _account);
+        uint256 delegatedWeight = delegation.userWeightAtEpochOf(epoch, _account);
 
         if (currentBalance == delegatedWeight) return;
 
@@ -346,7 +333,7 @@ contract GaugeVotePlatform {
 
         userInfo[proposalId][_account].hasUpdated = true;
 
-        address delegate = _getDelegate(_account, epoch);
+        address delegate = delegation.getDelegateAtEpoch(_account, epoch);
         if (delegate == address(0)) {
             delegate = _account;
         }
@@ -365,12 +352,12 @@ contract GaugeVotePlatform {
     function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
-            require(block.timestamp > proposals[pCnt - 1].endTime + overtime, "!prev_end");
+            if (block.timestamp <= proposals[pCnt - 1].endTime + overtime) revert PrevNotEnded();
         }
 
-        require(_endTime > _startTime, "!time");
-        require(_endTime - _startTime >= 3 days, "!time");
-        require(_endTime - _startTime <= 6 days, "!time");
+        if (_endTime <= _startTime) revert BadTime();
+        if (_endTime - _startTime < 3 days) revert BadTime();
+        if (_endTime - _startTime > 6 days) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;
@@ -385,8 +372,8 @@ contract GaugeVotePlatform {
 
     function forceEndProposal() public onlyOperator {
         uint256 proposalId = proposals.length - 1;
-        require(block.timestamp >= proposals[proposalId].startTime, "!start");
-        require(block.timestamp <= proposals[proposalId].endTime, "!end");
+        if (block.timestamp < proposals[proposalId].startTime) revert NotStarted();
+        if (block.timestamp > proposals[proposalId].endTime) revert Ended();
 
         proposals[proposalId].startTime = 0;
         proposals[proposalId].endTime = 0;
@@ -400,7 +387,7 @@ contract GaugeVotePlatform {
     }
 
     function acceptOwnership() external {
-        require(pendingowner == msg.sender, "!pendingowner");
+        if (pendingowner != msg.sender) revert NotPendingOwner();
         owner = pendingowner;
         pendingowner = address(0);
         emit AcceptedOwnership(owner);
@@ -417,17 +404,17 @@ contract GaugeVotePlatform {
     }
 
     modifier onlyOwner() {
-        require(owner == msg.sender, "!owner");
+        if (owner != msg.sender) revert NotOwner();
         _;
     }
 
     modifier onlyOperator() {
-        require(operators[msg.sender] || owner == msg.sender, "!operator");
+        if (!operators[msg.sender] && owner != msg.sender) revert NotOperator();
         _;
     }
 
     modifier onlyAcceptedSigner(address _account) {
-        require(_canSign(_account), "!signer");
+        if (msg.sender != _account && !surrogateRegistry.isSurrogate(msg.sender, _account)) revert NotSigner();
         _;
     }
 

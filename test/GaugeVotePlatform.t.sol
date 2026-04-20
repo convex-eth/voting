@@ -138,14 +138,14 @@ contract GaugeVotePlatformTest is Test {
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = block.timestamp + 1 days;
         vm.prank(operator);
-        vm.expectRevert(bytes("!time"));
+        vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 2 days);
     }
 
     function test_cannotCreateProposalTooLong() public {
         uint256 startTime = block.timestamp + 1 days;
         vm.prank(operator);
-        vm.expectRevert(bytes("!time"));
+        vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 7 days);
     }
 
@@ -157,7 +157,7 @@ contract GaugeVotePlatformTest is Test {
 
         vm.warp(startTime);
         vm.prank(operator);
-        vm.expectRevert(bytes("!prev_end"));
+        vm.expectRevert(GaugeVotePlatform.PrevNotEnded.selector);
         platform.createProposal(startTime + 5 days, startTime + 9 days);
     }
 
@@ -190,7 +190,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!weight"));
+        vm.expectRevert(GaugeVotePlatform.NoWeight.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -206,7 +206,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!start"));
+        vm.expectRevert(GaugeVotePlatform.NotStarted.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -221,7 +221,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!end"));
+        vm.expectRevert(GaugeVotePlatform.Ended.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -253,7 +253,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!end"));
+        vm.expectRevert(GaugeVotePlatform.Ended.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -266,7 +266,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(fakeGauge);
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!gauge"));
+        vm.expectRevert(GaugeVotePlatform.NotGauge.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -278,7 +278,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges2(address(gauge1), address(gauge2));
         uint256[] memory weights = _getWeights2(6000, 5000);
         vm.prank(alice);
-        vm.expectRevert(bytes("max weight"));
+        vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -457,7 +457,7 @@ contract GaugeVotePlatformTest is Test {
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
         vm.prank(alice);
-        vm.expectRevert(bytes("already voted"));
+        vm.expectRevert(GaugeVotePlatform.AlreadyVoted.selector);
         platform.updateUserWeight(alice);
     }
 
@@ -474,7 +474,7 @@ contract GaugeVotePlatformTest is Test {
         platform.updateUserWeight(alice);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("already updated"));
+        vm.expectRevert(GaugeVotePlatform.AlreadyUpdated.selector);
         platform.updateUserWeight(alice);
     }
 
@@ -574,7 +574,7 @@ contract GaugeVotePlatformTest is Test {
         platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
         vm.prank(surrogate);
-        vm.expectRevert(bytes("!voteAuth"));
+        vm.expectRevert(GaugeVotePlatform.NotVoteAuth.selector);
         platform.vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
     }
 
@@ -589,7 +589,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(randomAddr);
-        vm.expectRevert(bytes("!signer"));
+        vm.expectRevert(GaugeVotePlatform.NotSigner.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -658,7 +658,7 @@ contract GaugeVotePlatformTest is Test {
 
     function test_onlyOwnerCanTransfer() public {
         vm.prank(makeAddr("notOwner"));
-        vm.expectRevert(bytes("!owner"));
+        vm.expectRevert(GaugeVotePlatform.NotOwner.selector);
         platform.transferOwnership(makeAddr("newOwner"));
     }
 
@@ -666,7 +666,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(makeAddr("notOp"));
-        vm.expectRevert(bytes("!operator"));
+        vm.expectRevert(GaugeVotePlatform.NotOperator.selector);
         platform.createProposal(startTime, endTime);
     }
 
@@ -770,7 +770,7 @@ contract GaugeVotePlatformTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         uint256[] memory weights = _getWeights(10000);
         vm.prank(alice);
-        vm.expectRevert(bytes("!end"));
+        vm.expectRevert(GaugeVotePlatform.Ended.selector);
         platform.vote(alice, gauges, weights);
     }
 
@@ -914,7 +914,7 @@ contract GaugeVotePlatformTest is Test {
         vm.warp(endTime + 1);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("!end"));
+        vm.expectRevert(GaugeVotePlatform.Ended.selector);
         platform.updateUserWeight(alice);
     }
 
