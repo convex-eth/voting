@@ -47,7 +47,13 @@ contract GaugeVotePlatform{
         uint256[] weights;
     }
 
-    mapping(uint256 => mapping(address => uint256)) public gaugeTotals;
+    struct GaugeTotalEntry {
+        address gauge;
+        uint96 totalWeight;
+    }
+
+    mapping(uint256 => GaugeTotalEntry[]) internal _gaugeEntries;
+    mapping(uint256 => mapping(address => uint256)) internal _gaugeIndex;
     mapping(uint256 => uint256) public voteTotals;
 
     Proposal[] public proposals;
@@ -71,6 +77,22 @@ contract GaugeVotePlatform{
 
     function getVoterAtIndex(uint256 _proposalId, uint256 _index) external view returns(address){
         return votedUsers[_proposalId][_index];
+    }
+
+    function gaugeTotal(uint256 _proposalId, address _gauge) external view returns(uint256){
+        uint256 idx = _gaugeIndex[_proposalId][_gauge];
+        if (idx == 0) return 0;
+        return _gaugeEntries[_proposalId][idx - 1].totalWeight;
+    }
+
+    function getGaugeCount(uint256 _proposalId) external view returns(uint256){
+        return _gaugeEntries[_proposalId].length;
+    }
+
+    function getGaugeEntry(uint256 _proposalId, uint256 _index) external view returns(address gauge, uint256 totalWeight){
+        GaugeTotalEntry storage entry = _gaugeEntries[_proposalId][_index];
+        gauge = entry.gauge;
+        totalWeight = entry.totalWeight;
     }
 
     function getVote(uint256 _proposalId, address _user) public view returns (address[] memory gauges, uint256[] memory weights, bool voted, uint256 baseWeight, int256 adjustedWeight) {
@@ -203,13 +225,44 @@ contract GaugeVotePlatform{
     }
 
     function _changeGaugeTotal(uint256 _proposalId, address _gauge, int256 _changeValue) internal{
-
-        if(_changeValue > 0){
-            gaugeTotals[_proposalId][_gauge] += uint256(_changeValue);
-        }else{
-            gaugeTotals[_proposalId][_gauge] -= uint256(-_changeValue);
+        uint256 idx = _gaugeIndex[_proposalId][_gauge];
+        uint256 absVal;
+        unchecked {
+            absVal = _changeValue > 0 ? uint256(_changeValue) : uint256(-_changeValue);
         }
-        emit GaugeTotalChange(_proposalId, _gauge, gaugeTotals[_proposalId][_gauge]);
+
+        if (idx == 0) {
+            if (_changeValue > 0) {
+                _gaugeEntries[_proposalId].push(GaugeTotalEntry({gauge: _gauge, totalWeight: uint96(absVal)}));
+                _gaugeIndex[_proposalId][_gauge] = _gaugeEntries[_proposalId].length;
+                emit GaugeTotalChange(_proposalId, _gauge, absVal);
+            }
+            return;
+        }
+
+        GaugeTotalEntry storage existing = _gaugeEntries[_proposalId][idx - 1];
+
+        if (_changeValue > 0) {
+            existing.totalWeight += uint96(absVal);
+        } else {
+            existing.totalWeight -= uint96(absVal);
+        }
+
+        if (existing.totalWeight == 0) {
+            GaugeTotalEntry[] storage entries = _gaugeEntries[_proposalId];
+            uint256 lastIdx = entries.length;
+            if (idx < lastIdx) {
+                GaugeTotalEntry storage last = entries[lastIdx - 1];
+                existing.gauge = last.gauge;
+                existing.totalWeight = last.totalWeight;
+                _gaugeIndex[_proposalId][last.gauge] = idx;
+            }
+            entries.pop();
+            _gaugeIndex[_proposalId][_gauge] = 0;
+            emit GaugeTotalChange(_proposalId, _gauge, 0);
+        } else {
+            emit GaugeTotalChange(_proposalId, _gauge, existing.totalWeight);
+        }
     }
 
     function _canSign(address _account) internal view returns(bool){

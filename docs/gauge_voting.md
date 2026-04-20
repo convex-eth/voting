@@ -482,6 +482,45 @@ No separate updateUserWeight needed — just re-vote.
 - Operators can force-end an active proposal by zeroing `startTime`, `endTime`, and `epoch`
 - This effectively disables voting but preserves existing data in `gaugeTotals` and `voteTotals`
 
+## Required On-Chain Data
+
+### For On-Chain Execution (Curve Gauge Controller Submission)
+
+Convex must submit a list of gauges with percentage allocations to the Curve Gauge Controller. To produce this on-chain, the following data must be directly accessible:
+
+1. **`voteTotals[pid]`** — total vlCVX weight voted across all gauges (already exists)
+2. **`gaugeTotals[pid][gauge]`** — vlCVX weight attributed to each gauge (already exists)
+3. **List of gauges with positive vote weight** — stored in `_gaugeEntries[pid]` (array of `GaugeTotalEntry` structs with `{gauge, totalWeight}`) with `_gaugeIndex[pid][gauge]` for O(1) lookups. Enumerated via `getGaugeCount(pid)` and `getGaugeEntry(pid, index)`.
+
+The execution output is: for each gauge in the list, `percentage = gaugeTotals[pid][gauge] * 10000 / voteTotals[pid]` (basis points).
+
+**Gap:** There is currently no on-chain list of which gauges received votes. `gaugeTotals` is a mapping — you must know the gauge address to look it up. Iterating all registered gauges in the GaugeRegistry to find those with positive totals is possible but expensive and brittle. We should maintain a `votedGauges[pid]` list (address array of gauges with `gaugeTotals > 0`).
+
+### For Frontend UX
+
+A frontend must be able to read all display data via direct contract calls (no event indexing). Required data points:
+
+| Data | Source | Status |
+|---|---|---|
+| List of all voteable gauges | `GaugeRegistry` iteration or helper | Exists in GaugeRegistry |
+| Current gauge vote weights | `gaugeTotal(pid, gauge)` + `getGaugeCount(pid)` / `getGaugeEntry(pid, i)` | Exists — enumerable via packed array |
+| Your personal vote (gauges + weights) | `getVote(pid, user)` | Exists |
+| Your baseWeight and adjustedWeight | `userInfo[pid][user]` | Exists |
+| Proposal start/end times | `proposals[pid]` | Exists |
+| Previous and current proposals | `proposals` array + `proposalCount()` | Exists |
+| Total vlCVX voted | `voteTotals[pid]` | Exists |
+| Number of voters / voter list | `getVoterCount(pid)` / `votedUsers` | Exists (but may be removed for gas — see optimizations) |
+
+**Gap (same as above):** ~~The frontend needs to know which gauges have votes to display gauge weights. Without a `votedGauges` list, the frontend must query `gaugeTotals` for every registered gauge to find non-zero entries.~~ Resolved — `getGaugeCount` and `getGaugeEntry` provide full enumeration.
+
+### Summary of Data Gaps
+
+~~1. **`votedGauges[pid]` (address[])** — list of gauges with `gaugeTotals[pid][gauge] > 0`. Must be maintained as votes are cast and removed. Required for both on-chain execution and frontend display.~~
+
+**Resolved.** The `_gaugeEntries[pid]` array and `_gaugeIndex[pid][gauge]` mapping provide full enumeration. Each entry is a packed `GaugeTotalEntry { address gauge; uint96 totalWeight; }` struct. Entries are auto-removed (swap-and-pop) when totalWeight reaches zero.
+
+This is ~~a **hard requirement** before any gas optimization work~~ now implemented — whatever storage layout changes we make must preserve the ability to enumerate voted gauges efficiently.
+
 ## Design Notes
 
 1. **`updateUserWeight` only handles weight increases**: vlCVX balances only increase — locks cannot be partially unlocked, and relocking only adds weight. Weight decreases (from lock expiry) only affect future epochs, not the current one. Since proposals snapshot the current epoch, decreases are not a concern.

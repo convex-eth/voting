@@ -181,7 +181,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        assertGt(platform.gaugeTotals(pid, address(gauge1)), 0);
+        assertGt(platform.gaugeTotal(pid, address(gauge1)), 0);
     }
 
     function test_cannotVoteWithoutWeight() public {
@@ -297,12 +297,12 @@ contract GaugeVotePlatformTest is Test {
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
 
         (,,,, int256 carolAdj) = platform.getVote(pid, carol);
-        uint256 carolTotal = platform.gaugeTotals(pid, address(gauge1));
+        uint256 carolTotal = platform.gaugeTotal(pid, address(gauge1));
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         (,,,, int256 carolAdjAfter) = platform.getVote(pid, carol);
-        uint256 carolNewTotal = platform.gaugeTotals(pid, address(gauge1));
+        uint256 carolNewTotal = platform.gaugeTotal(pid, address(gauge1));
         assertLt(carolNewTotal, carolTotal);
 
         (,,,, int256 aliceAdj) = platform.getVote(pid, alice);
@@ -310,9 +310,9 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
 
-        uint256 g1Total = platform.gaugeTotals(pid, address(gauge1));
-        uint256 g2Total = platform.gaugeTotals(pid, address(gauge2));
-        uint256 g3Total = platform.gaugeTotals(pid, address(gauge3));
+        uint256 g1Total = platform.gaugeTotal(pid, address(gauge1));
+        uint256 g2Total = platform.gaugeTotal(pid, address(gauge2));
+        uint256 g3Total = platform.gaugeTotal(pid, address(gauge3));
         assertGt(g1Total, 0);
         assertGt(g2Total, 0);
         assertGt(g3Total, 0);
@@ -341,8 +341,8 @@ contract GaugeVotePlatformTest is Test {
 
         uint256 aliceWeight = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
         uint256 bobWeight = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
-        assertGt(platform.gaugeTotals(pid, address(gauge1)), 0);
-        assertGt(platform.gaugeTotals(pid, address(gauge2)), 0);
+        assertGt(platform.gaugeTotal(pid, address(gauge1)), 0);
+        assertGt(platform.gaugeTotal(pid, address(gauge2)), 0);
     }
 
     // ========== Scenario 3: Chain delegation (A->B->C) ==========
@@ -488,13 +488,13 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        uint256 g1Total = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1Total = platform.gaugeTotal(pid, address(gauge1));
         assertGt(g1Total, 0);
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        assertEq(platform.gaugeTotals(pid, address(gauge1)), 0);
-        uint256 g2Total = platform.gaugeTotals(pid, address(gauge2));
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), 0);
+        uint256 g2Total = platform.gaugeTotal(pid, address(gauge2));
         assertApproxEqAbs(g2Total, g1Total, WD);
     }
 
@@ -507,14 +507,14 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        uint256 g1Before = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1Before = platform.gaugeTotal(pid, address(gauge1));
         assertGt(g1Before, 0);
-        assertEq(platform.gaugeTotals(pid, address(gauge2)), 0);
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), 0);
 
         _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(5000, 5000));
 
-        uint256 g1After = platform.gaugeTotals(pid, address(gauge1));
-        uint256 g2After = platform.gaugeTotals(pid, address(gauge2));
+        uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
+        uint256 g2After = platform.gaugeTotal(pid, address(gauge2));
         assertGt(g2After, 0);
     }
 
@@ -595,11 +595,11 @@ contract GaugeVotePlatformTest is Test {
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 carolWeight = 2000 * WD + delegation.balanceAtEpochOf(proposalEpoch, carol);
-        uint256 g1AfterCarol = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1AfterCarol = platform.gaugeTotal(pid, address(gauge1));
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        uint256 g1AfterAlice = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1AfterAlice = platform.gaugeTotal(pid, address(gauge1));
         assertLt(g1AfterAlice, g1AfterCarol);
 
         _vote(carol, _getGauges(address(gauge3)), _getWeights(10000));
@@ -621,12 +621,12 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
-        uint256 g1Before = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1Before = platform.gaugeTotal(pid, address(gauge1));
 
         vm.prank(alice);
         platform.updateUserWeight(alice);
 
-        uint256 g1After = platform.gaugeTotals(pid, address(gauge1));
+        uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
         assertGt(g1After, g1Before);
     }
 
@@ -681,7 +681,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid1 = _createProposal();
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
-        assertGt(platform.gaugeTotals(pid1, address(gauge1)), 0);
+        assertGt(platform.gaugeTotal(pid1, address(gauge1)), 0);
 
         (, uint256 endTime1,) = platform.proposals(pid1);
         vm.warp(endTime1 + 10 minutes + 1);
@@ -696,8 +696,8 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        assertEq(platform.gaugeTotals(pid2, address(gauge1)), 0);
-        assertGt(platform.gaugeTotals(pid2, address(gauge2)), 0);
+        assertEq(platform.gaugeTotal(pid2, address(gauge1)), 0);
+        assertGt(platform.gaugeTotal(pid2, address(gauge2)), 0);
     }
 
     // ========== hasUpdated flag causes baseWeight removal ==========
@@ -798,5 +798,90 @@ contract GaugeVotePlatformTest is Test {
         assertEq(bw, 1000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
+    }
+
+    // ========== Gauge Entry Enumeration ==========
+
+    function test_gaugeTotalReturnsZeroForUnvoted() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        assertEq(platform.gaugeTotal(0, address(gauge1)), 0);
+    }
+
+    function test_gaugeCountAndEntries() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        assertEq(platform.getGaugeCount(pid), 0);
+
+        address[] memory g = new address[](3);
+        g[0] = address(gauge1);
+        g[1] = address(gauge2);
+        g[2] = address(gauge3);
+        uint256[] memory w = new uint256[](3);
+        w[0] = 3333;
+        w[1] = 3333;
+        w[2] = 3334;
+        _vote(alice, g, w);
+
+        assertEq(platform.getGaugeCount(pid), 3);
+
+        uint256 total;
+        for (uint256 i = 0; i < platform.getGaugeCount(pid); i++) {
+            (address gauge, uint256 weight) = platform.getGaugeEntry(pid, i);
+            assertGt(weight, 0);
+            total += weight;
+        }
+        assertApproxEqAbs(total, 1000 * WD, WD);
+    }
+
+    function test_gaugeEntryRemovedWhenTotalHitsZero() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        address[] memory g3 = new address[](3);
+        g3[0] = address(gauge1);
+        g3[1] = address(gauge2);
+        g3[2] = address(gauge3);
+        uint256[] memory w3 = new uint256[](3);
+        w3[0] = 3333;
+        w3[1] = 3333;
+        w3[2] = 3334;
+        _vote(alice, g3, w3);
+        assertEq(platform.getGaugeCount(pid), 3);
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        assertEq(platform.getGaugeCount(pid), 1);
+        (address g,) = platform.getGaugeEntry(pid, 0);
+        assertEq(g, address(gauge1));
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), 0);
+        assertEq(platform.gaugeTotal(pid, address(gauge3)), 0);
+    }
+
+    function test_gaugeTotalAcrossProposals() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid1 = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        assertEq(platform.getGaugeCount(pid1), 1);
+        assertGt(platform.gaugeTotal(pid1, address(gauge1)), 0);
+
+        (, uint256 endTime1,) = platform.proposals(pid1);
+        vm.warp(endTime1 + 10 minutes + 1);
+
+        uint256 startTime2 = block.timestamp + 1 days;
+        vm.prank(operator);
+        platform.createProposal(startTime2, startTime2 + 4 days);
+        vm.warp(startTime2);
+
+        uint256 pid2 = platform.proposalCount() - 1;
+        assertEq(platform.getGaugeCount(pid2), 0);
+        assertEq(platform.gaugeTotal(pid2, address(gauge1)), 0);
     }
 }
