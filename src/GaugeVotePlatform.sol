@@ -205,7 +205,7 @@ contract GaugeVotePlatform{
         uint256 totalweight;
         for(uint256 i = 0; i < _weights.length; i++) {
             require(_weights[i] > 0, "!weight");
-            require(gaugeRegistry.isValidGauge(_gauges[i]),"!gauge");
+            require(gaugeRegistry.isRegisteredGauge(_gauges[i]),"!gauge");
             votes[proposalId][_account].gauges.push(_gauges[i]);
             votes[proposalId][_account].weights.push(_weights[i]);
             totalweight += _weights[i];
