@@ -189,27 +189,22 @@ contract GaugeVotePlatform{
         int256 userWeight = userbase + userInfo[proposalId][_account].adjustedWeight;
         require(userWeight > 0, "!weight");
 
-        GaugeVote[] storage oldVotes = votes[proposalId][_account];
         if(userInfo[proposalId][_account].voteStatus > 0){
+            GaugeVote[] storage oldVotes = votes[proposalId][_account];
             uint256 oldLen = oldVotes.length;
             for(uint256 i = 0; i < oldLen;) {
                 _changeGaugeTotal(proposalId, oldVotes[i].gauge, -(int256(uint256(oldVotes[i].weight))*userWeight/int256(max_weight)) );
                 unchecked { ++i; }
             }
-        }
 
-        uint256 epoch = proposals[proposalId].epoch;
-        uint256 currentBalance = _getBaseWeight(_account, epoch);
-        if (currentBalance != userInfo[proposalId][_account].baseWeight) {
-            uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
-            userInfo[proposalId][_account].baseWeight = currentBalance;
-            userWeight = int256(currentBalance) + userInfo[proposalId][_account].adjustedWeight;
-
-            if (userInfo[proposalId][_account].voteStatus > 0) {
+            uint256 currentBalance = _getBaseWeight(_account, proposals[proposalId].epoch);
+            if (currentBalance != userInfo[proposalId][_account].baseWeight) {
+                uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
+                userInfo[proposalId][_account].baseWeight = currentBalance;
+                userWeight = int256(currentBalance) + userInfo[proposalId][_account].adjustedWeight;
                 voteTotals[proposalId] += currentBalance - oldBaseWeight;
+                emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
             }
-
-            emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
         }
 
         require(userWeight > 0, "!weight");
