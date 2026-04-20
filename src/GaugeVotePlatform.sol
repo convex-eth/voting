@@ -62,6 +62,8 @@ contract GaugeVotePlatform {
     mapping(address => bool) public equalizerAccounts;
     uint256 public constant overtime = 10 minutes;
 
+    mapping(uint256 => mapping(address => int96)) public pendingWeightAdjustment;
+
     function currentEpoch() public view returns (uint256) {
         return block.timestamp / epochDuration * epochDuration;
     }
@@ -151,25 +153,52 @@ contract GaugeVotePlatform {
                 weightToRemove = int256(_getDelegatedWeight(_account, epoch));
             }
 
+            int96 pending = pendingWeightAdjustment[_proposalId][delegate];
+            if (pending != 0) {
+                pendingWeightAdjustment[_proposalId][delegate] = 0;
+            }
+
             if (userInfo[_proposalId][delegate].voteStatus > 0) {
-                int256 delegateTotalWeight = int256(uint256(userInfo[_proposalId][delegate].baseWeight)) + int256(userInfo[_proposalId][delegate].adjustedWeight);
+                int256 netDelta = int256(pending) - weightToRemove;
+
                 GaugeVote[] storage delegateVotes = votes[_proposalId][delegate];
                 uint256 len = delegateVotes.length;
 
                 for (uint256 i = 0; i < len;) {
-                    int256 oldContribution = int256(uint256(delegateVotes[i].weight)) * delegateTotalWeight / int256(max_weight);
-                    int256 newContribution = int256(uint256(delegateVotes[i].weight)) * (delegateTotalWeight - weightToRemove) / int256(max_weight);
-                    _changeGaugeTotal(_proposalId, delegateVotes[i].gauge, newContribution - oldContribution);
+                    _changeGaugeTotal(_proposalId, delegateVotes[i].gauge, int256(uint256(delegateVotes[i].weight)) * netDelta / int256(max_weight));
                     unchecked { ++i; }
                 }
 
                 emit GaugeWeightsUpdated(_proposalId, delegate);
-                voteTotals[_proposalId] -= uint256(weightToRemove);
+                voteTotals[_proposalId] = voteTotals[_proposalId] + uint256(int256(pending)) - uint256(weightToRemove);
             }
 
+            userInfo[_proposalId][delegate].adjustedWeight += pending;
             userInfo[_proposalId][delegate].adjustedWeight -= int96(weightToRemove);
             emit UserWeightChange(_proposalId, delegate, userInfo[_proposalId][delegate].baseWeight, userInfo[_proposalId][delegate].adjustedWeight);
         }
+    }
+
+    function _applyPending(uint256 _proposalId, address _account, uint8 _voteStatus) internal {
+        int96 pending = pendingWeightAdjustment[_proposalId][_account];
+        if (pending == 0) return;
+
+        pendingWeightAdjustment[_proposalId][_account] = 0;
+        userInfo[_proposalId][_account].adjustedWeight += pending;
+
+        if (_voteStatus > 0) {
+            voteTotals[_proposalId] += uint256(int256(pending));
+
+            GaugeVote[] storage delegateVotes = votes[_proposalId][_account];
+            uint256 len = delegateVotes.length;
+            for (uint256 i = 0; i < len;) {
+                _changeGaugeTotal(_proposalId, delegateVotes[i].gauge, int256(uint256(delegateVotes[i].weight)) * int256(pending) / int256(max_weight));
+                unchecked { ++i; }
+            }
+        }
+
+        emit GaugeWeightsUpdated(_proposalId, _account);
+        emit UserWeightChange(_proposalId, _account, userInfo[_proposalId][_account].baseWeight, userInfo[_proposalId][_account].adjustedWeight);
     }
 
     function _vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) internal {
@@ -200,12 +229,14 @@ contract GaugeVotePlatform {
             if (currentBalance != uint256(userInfo[proposalId][_account].baseWeight)) {
                 uint256 oldBaseWeight = userInfo[proposalId][_account].baseWeight;
                 userInfo[proposalId][_account].baseWeight = uint96(currentBalance);
-                userWeight = int256(currentBalance) + int256(userInfo[proposalId][_account].adjustedWeight);
                 voteTotals[proposalId] += currentBalance - oldBaseWeight;
                 emit UserWeightChange(proposalId, _account, currentBalance, userInfo[proposalId][_account].adjustedWeight);
             }
         }
 
+        _applyPending(proposalId, _account, userInfo[proposalId][_account].voteStatus);
+
+        userWeight = int256(uint256(userInfo[proposalId][_account].baseWeight)) + int256(userInfo[proposalId][_account].adjustedWeight);
         require(userWeight > 0, "!weight");
 
         delete votes[proposalId][_account];
@@ -321,23 +352,14 @@ contract GaugeVotePlatform {
         }
 
         if (delegate != _account) {
-            if (userInfo[proposalId][delegate].voteStatus > 0) {
-                int256 delegateTotalWeight = int256(uint256(userInfo[proposalId][delegate].baseWeight)) + int256(userInfo[proposalId][delegate].adjustedWeight);
-                GaugeVote[] storage delegateVotes = votes[proposalId][delegate];
-                uint256 len = delegateVotes.length;
-                for (uint256 i = 0; i < len;) {
-                    int256 oldContribution = int256(uint256(delegateVotes[i].weight)) * delegateTotalWeight / int256(max_weight);
-                    int256 newContribution = int256(uint256(delegateVotes[i].weight)) * (delegateTotalWeight + diff) / int256(max_weight);
-                    _changeGaugeTotal(proposalId, delegateVotes[i].gauge, newContribution - oldContribution);
-                    unchecked { ++i; }
-                }
-                emit GaugeWeightsUpdated(proposalId, delegate);
-                voteTotals[proposalId] += uint256(diff);
-            }
-
-            userInfo[proposalId][delegate].adjustedWeight += int96(diff);
-            emit UserWeightChange(proposalId, delegate, userInfo[proposalId][delegate].baseWeight, userInfo[proposalId][delegate].adjustedWeight);
+            pendingWeightAdjustment[proposalId][delegate] += int96(diff);
+            emit PendingWeightAdjustment(proposalId, delegate, diff);
         }
+    }
+
+    function forceUpdateDelegate(address _delegate) external {
+        uint256 proposalId = proposals.length - 1;
+        _applyPending(proposalId, _delegate, userInfo[proposalId][_delegate].voteStatus);
     }
 
     function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {
@@ -414,6 +436,7 @@ contract GaugeVotePlatform {
     event ForceEndProposal(uint256 indexed id);
     event UserWeightChange(uint256 indexed pid, address indexed user, uint256 baseWeight, int256 adjustedWeight);
     event GaugeWeightsUpdated(uint256 indexed pid, address indexed user);
+    event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
     event TransferOwnership(address pendingOwner);
     event AcceptedOwnership(address newOwner);
     event OperatorSet(address indexed op, bool active);

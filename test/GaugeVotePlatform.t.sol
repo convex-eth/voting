@@ -431,6 +431,8 @@ contract GaugeVotePlatformTest is Test {
         (,,, bool hasUpdated,) = platform.userInfo(pid, alice);
         assertTrue(hasUpdated);
 
+        assertEq(platform.pendingWeightAdjustment(pid, bob), int96(int256(200 * WD)));
+
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         (uint256 aliceBw,,,,) = platform.userInfo(pid, alice);
@@ -438,6 +440,13 @@ contract GaugeVotePlatformTest is Test {
 
         (,,,, int256 bobAdj) = platform.getVote(pid, bob);
         assertEq(bobAdj, 0);
+        assertEq(platform.pendingWeightAdjustment(pid, bob), int96(0));
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        (,,,, int256 bobAdjAfter) = platform.getVote(pid, bob);
+        assertEq(bobAdjAfter, 0);
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
     }
 
     function test_updateUserWeightCannotCallAfterVoting() public {
@@ -625,6 +634,11 @@ contract GaugeVotePlatformTest is Test {
 
         vm.prank(alice);
         platform.updateUserWeight(alice);
+
+        uint256 g1Deferred = platform.gaugeTotal(pid, address(gauge1));
+        assertEq(g1Deferred, g1Before);
+
+        platform.forceUpdateDelegate(bob);
 
         uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
         assertGt(g1After, g1Before);
