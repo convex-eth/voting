@@ -6,6 +6,7 @@ import "../src/GaugeVotePlatform.sol";
 import "../src/GaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./mocks/MockVlCVX.sol";
 import "./mocks/MockGauges.sol";
 
@@ -167,6 +168,22 @@ contract GaugeVotePlatformTest is Test {
         platform.forceEndProposal();
 
         (uint256 s, uint256 e, uint256 ep) = platform.proposals(pid);
+        assertEq(s, 0);
+        assertEq(e, 0);
+        assertEq(ep, 0);
+    }
+
+    function test_forceEndProposalBeforeStart() public {
+        _warpToNextEpoch();
+        uint256 startTime = block.timestamp + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        platform.createProposal(startTime, endTime);
+
+        vm.prank(operator);
+        platform.forceEndProposal();
+
+        (uint256 s, uint256 e, uint256 ep) = platform.proposals(0);
         assertEq(s, 0);
         assertEq(e, 0);
         assertEq(ep, 0);
@@ -658,7 +675,7 @@ contract GaugeVotePlatformTest is Test {
 
     function test_onlyOwnerCanTransfer() public {
         vm.prank(makeAddr("notOwner"));
-        vm.expectRevert(GaugeVotePlatform.NotOwner.selector);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, makeAddr("notOwner")));
         platform.transferOwnership(makeAddr("newOwner"));
     }
 

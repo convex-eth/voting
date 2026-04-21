@@ -5,8 +5,9 @@ import "./GaugeRegistry.sol";
 import "./SurrogateRegistry.sol";
 import "./Delegation.sol";
 import "./interface/IvlCVX.sol";
+import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
-contract GaugeVotePlatform {
+contract GaugeVotePlatform is Ownable2Step {
 
     error NotStarted();
     error Ended();
@@ -20,12 +21,8 @@ contract GaugeVotePlatform {
     error AlreadyUpdated();
     error NotVoteAuth();
     error NotSigner();
-    error NotOwner();
     error NotOperator();
-    error NotPendingOwner();
 
-    address public owner;
-    address public pendingowner;
     mapping(address => bool) public operators;
 
     IvlCVX public immutable vlCVX;
@@ -129,7 +126,7 @@ contract GaugeVotePlatform {
     }
 
     function _initBaseInfo(address _account, uint256 _proposalId) internal {
-        UserInfo storage user = userInfo[_proposalId][_account];
+        UserInfo memory user = userInfo[_proposalId][_account];
         if (user.delegate != address(0)) return;
 
         uint256 epoch = proposals[_proposalId].epoch;
@@ -144,6 +141,8 @@ contract GaugeVotePlatform {
         user.baseWeight = uint96(baseWeight);
         user.delegate = delegate;
         user.adjustedWeight += int96(int256(delegation.balanceAtEpochOf(epoch, _account)));
+
+        userInfo[_proposalId][_account] = user;
 
         emit UserWeightChange(_proposalId, _account, baseWeight, user.adjustedWeight);
 
@@ -304,11 +303,12 @@ contract GaugeVotePlatform {
 
     function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
-        if (msg.sender != _account && userInfo[proposalId][_account].voteStatus > uint8(VoteStatus.VotedViaSurrogate)) revert NotVoteAuth();
+        uint8 vs = userInfo[proposalId][_account].voteStatus;
+        if (msg.sender != _account && vs >= uint8(VoteStatus.Voted)) revert NotVoteAuth();
 
         _vote(_account, _gauges, _weights);
 
-        if (userInfo[proposalId][_account].voteStatus <= uint8(VoteStatus.VotedViaSurrogate) && msg.sender == _account) {
+        if (msg.sender == _account && vs == uint8(VoteStatus.VotedViaSurrogate)) {
             userInfo[proposalId][_account].voteStatus = uint8(VoteStatus.Voted);
         }
     }
@@ -372,25 +372,13 @@ contract GaugeVotePlatform {
 
     function forceEndProposal() public onlyOperator {
         uint256 proposalId = proposals.length - 1;
-        if (block.timestamp < proposals[proposalId].startTime) revert NotStarted();
-        if (block.timestamp > proposals[proposalId].endTime) revert Ended();
+        if (proposals[proposalId].startTime == 0) revert NotStarted();
+        if (block.timestamp > proposals[proposalId].endTime + overtime) revert Ended();
 
         proposals[proposalId].startTime = 0;
         proposals[proposalId].endTime = 0;
         proposals[proposalId].epoch = 0;
         emit ForceEndProposal(proposalId);
-    }
-
-    function transferOwnership(address _owner) external onlyOwner {
-        pendingowner = _owner;
-        emit TransferOwnership(_owner);
-    }
-
-    function acceptOwnership() external {
-        if (pendingowner != msg.sender) revert NotPendingOwner();
-        owner = pendingowner;
-        pendingowner = address(0);
-        emit AcceptedOwnership(owner);
     }
 
     function setOperator(address _op, bool _active) external onlyOwner {
@@ -403,13 +391,8 @@ contract GaugeVotePlatform {
         emit EqualizerAccountSet(_eq, _active);
     }
 
-    modifier onlyOwner() {
-        if (owner != msg.sender) revert NotOwner();
-        _;
-    }
-
     modifier onlyOperator() {
-        if (!operators[msg.sender] && owner != msg.sender) revert NotOperator();
+        if (!operators[msg.sender] && owner() != msg.sender) revert NotOperator();
         _;
     }
 
@@ -424,13 +407,12 @@ contract GaugeVotePlatform {
     event UserWeightChange(uint256 indexed pid, address indexed user, uint256 baseWeight, int256 adjustedWeight);
     event GaugeWeightsUpdated(uint256 indexed pid, address indexed user);
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
-    event TransferOwnership(address pendingOwner);
-    event AcceptedOwnership(address newOwner);
     event OperatorSet(address indexed op, bool active);
     event EqualizerAccountSet(address indexed eq, bool active);
 
-    constructor(address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation) {
-        owner = msg.sender;
+    constructor(address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
+        Ownable(msg.sender)
+    {
         operators[msg.sender] = true;
         vlCVX = IvlCVX(_vlCVX);
         gaugeRegistry = GaugeRegistry(_gaugeRegistry);
