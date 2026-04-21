@@ -80,9 +80,9 @@ contract Delegation {
         vlCVX.checkpointEpoch();
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
-        if (len == 0) revert NoDelegate();
+        if (len == 0) return;
         address delegate = history[len - 1].delegate;
-        if (delegate == address(0)) revert NoDelegate();
+        if (delegate == address(0)) return;
         _syncUser(_user, delegate);
     }
 

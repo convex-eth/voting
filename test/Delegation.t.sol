@@ -334,7 +334,6 @@ contract DelegationTest is Test {
     }
 
     function test_cannotSyncWithoutDelegate() public {
-        vm.expectRevert(NoDelegate.selector);
         delegation.sync(alice);
     }
 
@@ -641,7 +640,6 @@ contract DelegationTest is Test {
         vm.prank(alice);
         delegation.setDelegate(address(0));
 
-        vm.expectRevert(NoDelegate.selector);
         delegation.sync(alice);
     }
 
