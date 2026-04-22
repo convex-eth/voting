@@ -185,6 +185,20 @@ contract GaugeExecutorTest is Test {
         executor.executeGaugeVote(pid0, gauges);
     }
 
+    function test_revertIfEpochExpired() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid);
+
+        _warpToNextEpoch();
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        vm.expectRevert(GaugeExecutor.EpochExpired.selector);
+        executor.executeGaugeVote(pid, gauges);
+    }
+
     // ========== Weight Calculation ==========
 
     function test_singleGaugeFullWeight() public {
@@ -221,7 +235,7 @@ contract GaugeExecutorTest is Test {
         assertEq(w[1], 4000);
     }
 
-    function test_multipleVotersWeightCalculation() public {
+    function test_multipleVotersWeightPaddedTo10000() public {
         _lockAndDelegate(alice, 1000, address(0));
         _lockAndDelegate(bob, 500, address(0));
         _warpToNextEpoch();
@@ -234,18 +248,14 @@ contract GaugeExecutorTest is Test {
 
         uint256 totalVotes = platform.voteTotals(pid);
         uint256 gauge1Total = platform.gaugeTotal(pid, address(gauge1));
-        uint256 gauge2Total = platform.gaugeTotal(pid, address(gauge2));
-
         uint256 expectedG1Weight = gauge1Total * 10000 / totalVotes;
-        uint256 expectedG2Weight = gauge2Total * 10000 / totalVotes;
 
         address[] memory gauges = _getGauges2(address(gauge1), address(gauge2));
         executor.executeGaugeVote(pid, gauges);
 
         (, uint256[] memory w) = voteDelegate.getLastCall();
         assertEq(w[0], expectedG1Weight);
-        assertEq(w[1], expectedG2Weight);
-        assertTrue(w[0] + w[1] >= 9999 && w[0] + w[1] <= 10000);
+        assertEq(w[0] + w[1], 10000);
     }
 
     function test_gaugeNotVotedGetsZeroWeight() public {
@@ -326,7 +336,7 @@ contract GaugeExecutorTest is Test {
         executor.executeGaugeVote(pid, gauges);
     }
 
-    function test_threeWayEvenSplit() public {
+    function test_threeWayEvenSplitPaddedTo10000() public {
         _lockAndDelegate(alice, 1000, address(0));
         _lockAndDelegate(bob, 1000, address(0));
         _lockAndDelegate(carol, 1000, address(0));
@@ -349,12 +359,141 @@ contract GaugeExecutorTest is Test {
         assertEq(g.length, 3);
 
         uint256 g1Total = platform.gaugeTotal(pid, address(gauge1));
-        uint256 g2Total = platform.gaugeTotal(pid, address(gauge2));
-        uint256 g3Total = platform.gaugeTotal(pid, address(gauge3));
-
         assertEq(w[0], g1Total * 10000 / totalVotes);
-        assertEq(w[1], g2Total * 10000 / totalVotes);
-        assertEq(w[2], g3Total * 10000 / totalVotes);
+        assertEq(w[0] + w[1] + w[2], 10000);
+    }
+
+    // ========== isDone ==========
+
+    function test_isDoneFalseBeforeExecution() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid);
+
+        assertFalse(executor.isDone(pid));
+    }
+
+    function test_isDoneFalseIfNotFinalized() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        assertFalse(executor.isDone(pid));
+    }
+
+    function test_isDoneTrueAfterAllGaugesExecuted() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid);
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        executor.executeGaugeVote(pid, gauges);
+
+        assertTrue(executor.isDone(pid));
+    }
+
+    function test_isDoneFalseAfterPartialExecution() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        executor.executeGaugeVote(pid, gauges);
+
+        assertFalse(executor.isDone(pid));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertEq(executor.submittedWeight(pid), 6000);
+    }
+
+    // ========== Multi-batch with padding ==========
+
+    function test_multiBatchPadsOnLastBatch() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _lockAndDelegate(bob, 500, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges3(address(gauge1), address(gauge2), address(gauge3)), _getWeights3(5000, 3000, 2000));
+        _vote(bob, _getGauges3(address(gauge1), address(gauge2), address(gauge3)), _getWeights3(4000, 4000, 2000));
+
+        _finalizeProposal(pid);
+
+        assertEq(platform.getGaugeCount(pid), 3);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertFalse(executor.isDone(pid));
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge2)));
+        assertEq(executor.submittedGaugeCount(pid), 2);
+        assertFalse(executor.isDone(pid));
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge3)));
+        assertEq(executor.submittedGaugeCount(pid), 3);
+        assertEq(executor.submittedWeight(pid), 10000);
+        assertTrue(executor.isDone(pid));
+
+        (, uint256[] memory w) = voteDelegate.getLastCall();
+        assertEq(w[0] + executor.submittedWeight(pid) - w[0], 10000);
+    }
+
+    function test_multiBatchWithZeroWeightGaugesMixedIn() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        assertEq(platform.getGaugeCount(pid), 2);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertFalse(executor.isDone(pid));
+
+        address[] memory batch2 = new address[](2);
+        batch2[0] = address(gauge3);
+        batch2[1] = address(gauge2);
+        executor.executeGaugeVote(pid, batch2);
+
+        assertEq(executor.submittedGaugeCount(pid), 2);
+        assertEq(executor.submittedWeight(pid), 10000);
+        assertTrue(executor.isDone(pid));
+
+        (, uint256[] memory w) = voteDelegate.getLastCall();
+        assertEq(w[0], 0);
+        assertEq(w[1], 4000);
+    }
+
+    // ========== State tracking ==========
+
+    function test_submittedWeightTracksAcrossBatches() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges3(address(gauge1), address(gauge2), address(gauge3)), _getWeights3(5000, 3000, 2000));
+        _finalizeProposal(pid);
+
+        assertEq(executor.submittedGaugeCount(pid), 0);
+        assertEq(executor.submittedWeight(pid), 0);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertEq(executor.submittedWeight(pid), 5000);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge2)));
+        assertEq(executor.submittedGaugeCount(pid), 2);
+        assertEq(executor.submittedWeight(pid), 8000);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge3)));
+        assertEq(executor.submittedGaugeCount(pid), 3);
+        assertEq(executor.submittedWeight(pid), 10000);
     }
 
     // ========== Event ==========
