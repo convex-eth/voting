@@ -17,8 +17,20 @@ contract GaugeExecutor {
     GaugeVotePlatform public immutable votePlatform;
     IVoteDelegateExtension public immutable voteDelegate;
 
-    mapping(uint256 => uint256) public submittedGaugeCount;
-    mapping(uint256 => uint256) public submittedWeight;
+    struct ExecutionState {
+        uint128 gaugeCount;
+        uint128 weight;
+    }
+
+    mapping(uint256 => ExecutionState) internal _executionState;
+
+    function submittedGaugeCount(uint256 proposalId) external view returns (uint256) {
+        return _executionState[proposalId].gaugeCount;
+    }
+
+    function submittedWeight(uint256 proposalId) external view returns (uint256) {
+        return _executionState[proposalId].weight;
+    }
 
     event GaugeVoteExecuted(uint256 indexed proposalId, address[] gauges, uint256[] weights);
 
@@ -54,16 +66,17 @@ contract GaugeExecutor {
             unchecked { ++i; }
         }
 
-        uint256 newCount = submittedGaugeCount[proposalId] + count;
-        uint256 newWeight = submittedWeight[proposalId] + weightSum;
+        ExecutionState memory state = _executionState[proposalId];
+
+        uint256 newCount = state.gaugeCount + count;
+        uint256 newWeight = state.weight + weightSum;
 
         if (count > 0 && newCount >= totalGaugeCount && newWeight < WEIGHT_BPS) {
             weights[lastNonZero] += WEIGHT_BPS - newWeight;
             newWeight = WEIGHT_BPS;
         }
 
-        submittedGaugeCount[proposalId] = newCount;
-        submittedWeight[proposalId] = newWeight;
+        _executionState[proposalId] = ExecutionState(uint128(newCount), uint128(newWeight));
 
         voteDelegate.GaugeVote(gauges, weights);
         emit GaugeVoteExecuted(proposalId, gauges, weights);
@@ -71,7 +84,7 @@ contract GaugeExecutor {
 
     function isDone(uint256 proposalId) external view returns (bool) {
         if (!votePlatform.isFinalized(proposalId)) return false;
-        return submittedGaugeCount[proposalId] == votePlatform.getGaugeCount(proposalId);
+        return _executionState[proposalId].gaugeCount == votePlatform.getGaugeCount(proposalId);
     }
 
 }
