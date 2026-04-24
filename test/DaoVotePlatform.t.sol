@@ -59,15 +59,15 @@ contract DaoVotePlatformTest is Test {
         uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
-        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
         uint256 pid = dao.proposalCount() - 1;
-        (,, proposalEpoch,) = dao.proposals(pid);
+        (,, proposalEpoch,,) = dao.proposals(pid);
         vm.warp(startTime);
         return pid;
     }
 
     function _finalizeProposal(uint256 pid) internal {
-        (, uint256 endTime,,) = dao.proposals(pid);
+        (, uint256 endTime,,,) = dao.proposals(pid);
         vm.warp(endTime + dao.finalizationTime() + 1);
     }
 
@@ -97,43 +97,45 @@ contract DaoVotePlatformTest is Test {
         uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
-        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership, 42);
 
-        (uint256 s, uint256 e,, uint8 vt) = dao.proposals(0);
+        (uint256 s, uint256 e,, uint8 vt, uint256 pId) = dao.proposals(0);
         assertEq(s, startTime);
         assertEq(e, endTime);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
+        assertEq(pId, 42);
     }
 
     function test_createProposalParameterType() public {
         uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
-        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 99);
 
-        (,,, uint8 vt) = dao.proposals(0);
+        (,,, uint8 vt, uint256 pId) = dao.proposals(0);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Parameter));
+        assertEq(pId, 99);
     }
 
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = block.timestamp + 1 days;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
-        dao.createProposal(startTime, startTime + 2 days, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(startTime, startTime + 2 days, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateProposalTooLong() public {
         uint256 startTime = block.timestamp + 1 days;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
-        dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
         uint256 pid = _createProposal();
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.PrevNotEnded.selector);
-        dao.createProposal(block.timestamp + 5 days, block.timestamp + 9 days, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(block.timestamp + 5 days, block.timestamp + 9 days, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_forceEndProposal() public {
@@ -141,7 +143,7 @@ contract DaoVotePlatformTest is Test {
         vm.prank(operator);
         dao.forceEndProposal();
 
-        (uint256 s, uint256 e, uint256 ep,) = dao.proposals(pid);
+        (uint256 s, uint256 e, uint256 ep,,) = dao.proposals(pid);
         assertEq(s, 0);
         assertEq(e, 0);
         assertEq(ep, 0);
@@ -153,7 +155,7 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
         _voteYes(alice);
 
-        (, uint256 endTime,,) = dao.proposals(pid);
+        (, uint256 endTime,,,) = dao.proposals(pid);
         vm.warp(endTime + 6 hours);
 
         vm.prank(operator);
@@ -175,12 +177,32 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
         _voteYes(alice);
 
-        (, uint256 endTime,,) = dao.proposals(pid);
+        (, uint256 endTime,,,) = dao.proposals(pid);
 
         vm.warp(endTime + 6 hours);
         assertFalse(dao.isFinalized(pid));
 
         vm.warp(endTime + dao.finalizationTime() + 1);
+        assertTrue(dao.isFinalized(pid));
+    }
+
+    function test_isFinished() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _voteYes(alice);
+
+        (, uint256 endTime,,,) = dao.proposals(pid);
+
+        vm.warp(endTime - 1);
+        assertFalse(dao.isFinished(pid));
+
+        vm.warp(endTime + 1);
+        assertTrue(dao.isFinished(pid));
+        assertFalse(dao.isFinalized(pid));
+
+        vm.warp(endTime + dao.finalizationTime() + 1);
+        assertTrue(dao.isFinished(pid));
         assertTrue(dao.isFinalized(pid));
     }
 
@@ -235,7 +257,7 @@ contract DaoVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        (, uint256 endTime,,) = dao.proposals(pid);
+        (, uint256 endTime,,,) = dao.proposals(pid);
         vm.warp(endTime + 1);
 
         vm.prank(alice);
@@ -250,7 +272,7 @@ contract DaoVotePlatformTest is Test {
         uint256 startTime = block.timestamp + 2 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
-        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership, 1);
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.NotStarted.selector);
@@ -643,7 +665,7 @@ contract DaoVotePlatformTest is Test {
         uint256 endTime = startTime + 4 days;
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.NotOperator.selector);
-        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_setOperator() public {

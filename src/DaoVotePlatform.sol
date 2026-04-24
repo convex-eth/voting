@@ -51,6 +51,7 @@ contract DaoVotePlatform is Ownable2Step {
         uint48 endTime;
         uint48 epoch;
         uint8 voteType;
+        uint104 proposalId;
     }
 
     struct VoteTotals {
@@ -126,6 +127,10 @@ contract DaoVotePlatform is Ownable2Step {
 
     function isFinalized(uint256 _proposalId) public view returns (bool) {
         return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime + finalizationTime;
+    }
+
+    function isFinished(uint256 _proposalId) public view returns (bool) {
+        return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime;
     }
 
     function _changeVoteTotals(uint256 _proposalId, int256 _delta, uint256 _yesWeight, uint256 _noWeight) internal {
@@ -288,7 +293,7 @@ contract DaoVotePlatform is Ownable2Step {
         _applyPending(proposalId, _delegate, userInfo[proposalId][_delegate].voteStatus);
     }
 
-    function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType) public onlyOperator {
+    function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
             if (block.timestamp <= proposals[pCnt - 1].endTime + finalizationTime) revert PrevNotEnded();
@@ -305,7 +310,8 @@ contract DaoVotePlatform is Ownable2Step {
             startTime: uint48(_startTime),
             endTime: uint48(_endTime),
             epoch: uint48(epoch),
-            voteType: uint8(_voteType)
+            voteType: uint8(_voteType),
+            proposalId: uint104(_proposalId)
         }));
         emit NewProposal(proposals.length - 1, _startTime, _endTime, _voteType);
     }
