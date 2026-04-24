@@ -217,7 +217,11 @@ contract DaoVotePlatform is Ownable2Step {
             }
         }
 
-        _applyPending(proposalId, _account, user.voteStatus);
+        int96 pend = pendingWeightAdjustment[proposalId][_account];
+        if (pend != 0) {
+            pendingWeightAdjustment[proposalId][_account] = 0;
+            user.adjustedWeight += pend;
+        }
 
         userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
         if (userWeight <= 0) revert NoWeight();
