@@ -16,9 +16,10 @@ No GaugeRegistry — there are no gauges to validate.
 
 ## Proposals
 
-- Created by operators via `createProposal(startTime, endTime, voteType)`, same 3-6 day duration constraint as GaugeVotePlatform
+- Created by operators via `createProposal(startTime, endTime, voteType, proposalId)`, same 3-6 day duration constraint as GaugeVotePlatform
 - Each proposal records an epoch: `vlCVX.checkpointEpoch()` then `epoch = vlCVX.epochCount() - 2`
 - A new proposal cannot be created until the previous proposal's `endTime + finalizationTime` has passed
+- The `proposalId` is an external reference ID (e.g. a snapshot hash, forum post ID, or off-chain governance identifier) that gets passed through to `VoteExecutor` and ultimately to `IVoteDelegationExtension.DaoVoteWithWeights()` as the `_voteId` parameter. This allows the on-chain vote to be linked back to its off-chain proposal context.
 
 ### Vote Types
 
@@ -137,3 +138,38 @@ When delegatee weight adjustments affect a delegate who has already voted, the d
 | Max weight check | `sum(weights) <= 10000` | `yesWeight + noWeight <= 10000` |
 | Delegate weight removal | Loop through gauge allocations, adjust proportionally | Single `_changeVoteTotals` call, distributed by yes/no split |
 | Gas per vote | ~260k (1 gauge) to ~430k (3 gauges) | Significantly less — no gauge array, no per-gauge total updates |
+| Execution | GaugeExecutor | VoteExecutor |
+
+## VoteExecutor
+
+VoteExecutor takes a finalized DAO proposal's results and submits them on-chain via `IVoteDelegationExtension.DaoVoteWithWeights()`.
+
+### Access
+
+| Role | When they can execute |
+|---|---|
+| **Anyone** | After `isFinalized()` (past the 12-hour finalization window) |
+| **Guardian** | After `isFinished()` (voting ended, during the finalization window) |
+
+Guardians are set by the contract owner via `setGuardian(address, bool)`. This allows a governance layer to push results on-chain quickly if desired, or veto by force-ending the proposal instead.
+
+### Execution Flow
+
+1. Verify proposal is finished (`endTime` has passed)
+2. Verify caller is a guardian if not yet finalized
+3. Verify not already executed
+4. Read proposal's `proposalId`, `voteType`, yes/no totals from DaoVotePlatform
+5. Call `DaoVoteWithWeights(proposalId, yes, no, isOwnership)` on the extension
+6. Mark `executed[proposalId] = true`
+
+### Key Differences from GaugeExecutor
+
+| Aspect | GaugeExecutor | VoteExecutor |
+|---|---|---|
+| Latest proposal check | Required | No — multiple proposals can execute in any order |
+| Epoch check | Must be current epoch | None — can execute anytime |
+| Access control | Permissionless | Permissionless after finalized, guardian during finalization |
+| Output | Arrays of gauges + bps weights | Single `(voteId, yay, nay, isOwnership)` call |
+| Weight calculation | Contract computes bps from totals | Passes raw yes/no totals directly |
+| State tracking | Gauge count + running weight (packed) | Simple `bool executed` per proposal |
+| Ownership | None | Ownable2Step — owner manages guardians |

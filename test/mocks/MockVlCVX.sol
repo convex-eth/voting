@@ -22,6 +22,8 @@ contract MockVlCVX is IvlCVX {
     mapping(address => UserLock[]) internal _userLocks;
     mapping(address => uint256) internal _userBoosted;
     mapping(address => uint256) internal _userLocked;
+    mapping(address => bool) internal _knownUser;
+    address[] internal _users;
     EpochData[] internal _epochs;
 
     constructor() {
@@ -107,6 +109,10 @@ contract MockVlCVX is IvlCVX {
 
     function mockLock(address _user, uint256 _amount, uint256 _boosted) external {
         this.checkpointEpoch();
+        if (!_knownUser[_user]) {
+            _knownUser[_user] = true;
+            _users.push(_user);
+        }
         uint256 lockEpoch = _currentEpochTime() + rewardsDuration;
         uint256 unlockTime = lockEpoch + lockDuration;
 
@@ -155,7 +161,13 @@ contract MockVlCVX is IvlCVX {
     }
 
     function totalSupply() external pure override returns (uint256) { return 0; }
-    function totalSupplyAtEpoch(uint256) external pure override returns (uint256) { return 0; }
+    function totalSupplyAtEpoch(uint256) external view override returns (uint256) {
+        uint256 total;
+        for (uint256 i = 0; i < _users.length; i++) {
+            total += _userLocked[_users[i]];
+        }
+        return total;
+    }
     function stakingToken() external pure override returns (address) { return address(0); }
     function cvxCrv() external pure override returns (address) { return address(0); }
     function rewardTokens(uint256) external pure override returns (address) { return address(0); }
