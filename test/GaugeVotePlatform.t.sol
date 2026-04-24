@@ -980,4 +980,49 @@ contract GaugeVotePlatformTest is Test {
 
         assertFalse(platform.isFinalized(pid));
     }
+
+    // ========== Re-vote dust: pending + non-round split ==========
+
+    function test_revoteNoDustWithPendingAndNonRoundSplit() public {
+        _lockAndDelegate(alice, 500, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+
+        mockVlCVX.mockRelock(alice, 0, 700 * WD);
+
+        uint256 pid = _createProposal();
+
+        address[] memory g = new address[](3);
+        g[0] = address(gauge1);
+        g[1] = address(gauge2);
+        g[2] = address(gauge3);
+        uint256[] memory w = new uint256[](3);
+        w[0] = 3333;
+        w[1] = 3333;
+        w[2] = 3334;
+
+        vm.prank(bob);
+        platform.vote(bob, g, w);
+
+        uint256 g1Before = platform.gaugeTotal(pid, address(gauge1));
+        uint256 g2Before = platform.gaugeTotal(pid, address(gauge2));
+        uint256 g3Before = platform.gaugeTotal(pid, address(gauge3));
+        uint256 totalBefore = platform.voteTotals(pid);
+
+        vm.prank(alice);
+        platform.updateUserWeight(alice);
+
+        vm.prank(bob);
+        platform.vote(bob, g, w);
+
+        uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
+        uint256 g2After = platform.gaugeTotal(pid, address(gauge2));
+        uint256 g3After = platform.gaugeTotal(pid, address(gauge3));
+        uint256 totalAfter = platform.voteTotals(pid);
+
+        assertEq(g1After, g1Before + 200 * WD * 3333 / 10000);
+        assertEq(g2After, g2Before + 200 * WD * 3333 / 10000);
+        assertEq(g3After, g3Before + 200 * WD * 3334 / 10000);
+        assertEq(totalAfter, totalBefore + 200 * WD);
+    }
 }

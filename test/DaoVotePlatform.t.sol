@@ -688,19 +688,32 @@ contract DaoVotePlatformTest is Test {
 
     // ========== Delegate with split vote ==========
 
-    function test_delegateWithSplitVoteWeightRemoval() public {
+    function test_revoteNoDustWithPendingAndNonRoundSplit() public {
         _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 1000, address(0));
+        _lockAndDelegate(bob, 2000, address(0));
         _warpToNextEpoch();
+
+        mockVlCVX.mockRelock(alice, 0, 700 * WD);
+
         uint256 pid = _createProposal();
 
-        _vote(bob, 6000, 4000);
-        assertEq(dao.getYes(pid), 900 * WD);
-        assertEq(dao.getNo(pid), 600 * WD);
+        _vote(bob, 3333, 6667);
 
-        _voteYes(alice);
+        uint256 yesBefore = dao.getYes(pid);
+        uint256 noBefore = dao.getNo(pid);
+        uint256 totalBefore = dao.voteTotals(pid);
 
-        assertEq(dao.getYes(pid), 900 * WD - 500 * WD * 6000 / 10000 + 500 * WD);
-        assertEq(dao.getNo(pid), 600 * WD - 500 * WD * 4000 / 10000);
+        vm.prank(alice);
+        dao.updateUserWeight(alice);
+
+        _vote(bob, 3333, 6667);
+
+        uint256 yesAfter = dao.getYes(pid);
+        uint256 noAfter = dao.getNo(pid);
+        uint256 totalAfter = dao.voteTotals(pid);
+
+        assertEq(yesAfter, yesBefore + 200 * WD * 3333 / 10000);
+        assertEq(noAfter, noBefore + 200 * WD * 6667 / 10000);
+        assertEq(totalAfter, totalBefore + 200 * WD);
     }
 }
