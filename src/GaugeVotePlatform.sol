@@ -49,9 +49,9 @@ contract GaugeVotePlatform is Ownable2Step {
     mapping(uint256 => address[]) public votedUsers;
 
     struct Proposal {
-        uint256 startTime;
-        uint256 endTime;
-        uint256 epoch;
+        uint48 startTime;
+        uint48 endTime;
+        uint48 epoch;
     }
 
     struct GaugeVote {
@@ -370,9 +370,9 @@ contract GaugeVotePlatform is Ownable2Step {
         uint256 epoch = vlCVX.epochCount() - 2;
 
         proposals.push(Proposal({
-            startTime: _startTime,
-            endTime: _endTime,
-            epoch: epoch
+            startTime: uint48(_startTime),
+            endTime: uint48(_endTime),
+            epoch: uint48(epoch)
         }));
         emit NewProposal(proposals.length - 1, _startTime, _endTime);
     }

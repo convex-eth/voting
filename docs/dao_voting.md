@@ -16,9 +16,26 @@ No GaugeRegistry — there are no gauges to validate.
 
 ## Proposals
 
-- Created by operators via `createProposal(startTime, endTime)`, same 3-6 day duration constraint as GaugeVotePlatform
+- Created by operators via `createProposal(startTime, endTime, voteType)`, same 3-6 day duration constraint as GaugeVotePlatform
 - Each proposal records an epoch: `vlCVX.checkpointEpoch()` then `epoch = vlCVX.epochCount() - 2`
 - A new proposal cannot be created until the previous proposal's `endTime + finalizationTime` has passed
+
+### Vote Types
+
+Curve DAO has two categories of governance votes, modeled as the `VoteType` enum:
+
+| VoteType | Value | Purpose | Typical Quorum |
+|---|---|---|---|
+| `Ownership` | 0 | Major admin actions: changing contract ownership, upgrading implementations, modifying critical parameters | Higher (e.g. 30%+) |
+| `Parameter` | 1 | Routine parameter changes: adjusting fees, rates, limits, rewards | Lower (e.g. 15%+) |
+
+The `voteType` is set at proposal creation and stored on-chain in the `Proposal` struct. It does not affect voting mechanics within this contract — all proposals use the same voting flow. The distinction exists so that off-chain infrastructure and execution layers can:
+
+1. Display the vote category to voters
+2. Apply different quorum thresholds when interpreting results
+3. Route approved proposals to the appropriate execution path
+
+Quorum enforcement is intentionally **not** done on-chain in this contract. The vote type is purely informational metadata that consumers of the results use to determine if the vote meets the required threshold for its category.
 
 ### Finalization Window
 

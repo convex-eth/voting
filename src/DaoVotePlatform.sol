@@ -47,14 +47,20 @@ contract DaoVotePlatform is Ownable2Step {
     }
 
     struct Proposal {
-        uint256 startTime;
-        uint256 endTime;
-        uint256 epoch;
+        uint48 startTime;
+        uint48 endTime;
+        uint48 epoch;
+        uint8 voteType;
     }
 
     struct VoteTotals {
         uint128 yes;
         uint128 no;
+    }
+
+    enum VoteType {
+        Ownership,
+        Parameter
     }
 
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
@@ -64,7 +70,7 @@ contract DaoVotePlatform is Ownable2Step {
     mapping(uint256 => mapping(address => int96)) public pendingWeightAdjustment;
 
     event VoteCast(uint256 indexed proposalId, address indexed user, uint256 yesWeight, uint256 noWeight);
-    event NewProposal(uint256 indexed id, uint256 start, uint256 end);
+    event NewProposal(uint256 indexed id, uint256 start, uint256 end, VoteType voteType);
     event ForceEndProposal(uint256 indexed id);
     event UserWeightChange(uint256 indexed pid, address indexed user, uint256 baseWeight, int256 adjustedWeight);
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
@@ -282,7 +288,7 @@ contract DaoVotePlatform is Ownable2Step {
         _applyPending(proposalId, _delegate, userInfo[proposalId][_delegate].voteStatus);
     }
 
-    function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {
+    function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType) public onlyOperator {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
             if (block.timestamp <= proposals[pCnt - 1].endTime + finalizationTime) revert PrevNotEnded();
@@ -296,11 +302,12 @@ contract DaoVotePlatform is Ownable2Step {
         uint256 epoch = vlCVX.epochCount() - 2;
 
         proposals.push(Proposal({
-            startTime: _startTime,
-            endTime: _endTime,
-            epoch: epoch
+            startTime: uint48(_startTime),
+            endTime: uint48(_endTime),
+            epoch: uint48(epoch),
+            voteType: uint8(_voteType)
         }));
-        emit NewProposal(proposals.length - 1, _startTime, _endTime);
+        emit NewProposal(proposals.length - 1, _startTime, _endTime, _voteType);
     }
 
     function forceEndProposal() public onlyOperator {
