@@ -25,6 +25,12 @@ contract Delegation {
         uint32 startingEpoch;
     }
 
+    struct SyncSnapshot {
+        uint64 timestamp;
+        uint32 preSyncWeight;
+        uint32 epoch;
+    }
+
     error NoDelegate();
     error SelfDelegation();
 
@@ -32,6 +38,7 @@ contract Delegation {
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public delegateEpochWeights;
     mapping(address => uint256) public syncedUserEpoch;
+    mapping(address => SyncSnapshot) public syncSnapshots;
 
     constructor(address _vlCVX) {
         vlCVX = IvlCVX(_vlCVX);
@@ -70,7 +77,7 @@ contract Delegation {
         }
 
         if (_delegate != address(0)) {
-            _syncUser(msg.sender, _delegate);
+            _syncUser(msg.sender, _delegate, false);
         }
 
         emit DelegateSet(msg.sender, _delegate);
@@ -78,12 +85,29 @@ contract Delegation {
 
     function sync(address _user) external {
         vlCVX.checkpointEpoch();
+        uint256 currentEpoch = vlCVX.epochCount() - 2;
+
+        if (syncSnapshots[_user].epoch == currentEpoch) return;
+
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
         if (len == 0) return;
         address delegate = history[len - 1].delegate;
         if (delegate == address(0)) return;
-        _syncUser(_user, delegate);
+
+        uint256 offset = currentEpoch & 7;
+        EpochWeightingEntry memory entry = userEpochWeights[_user][currentEpoch >> 3];
+        uint256 raw;
+        assembly {
+            raw := mload(add(entry, mul(offset, 32)))
+        }
+        syncSnapshots[_user] = SyncSnapshot({
+            epoch: uint32(currentEpoch),
+            preSyncWeight: uint32(raw),
+            timestamp: uint64(block.timestamp)
+        });
+
+        _syncUser(_user, delegate, true);
     }
 
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
@@ -98,10 +122,18 @@ contract Delegation {
         return address(0);
     }
 
-    function _syncUser(address _user, address _delegate) internal {
-        uint256 nextEpoch = vlCVX.epochCount() - 1;
+    function _syncUser(address _user, address _delegate, bool _includeCurrentEpoch) internal {
+        uint256 nextEpoch;
+        uint256 fillEpochs;
+        if (_includeCurrentEpoch) {
+            nextEpoch = vlCVX.epochCount() - 2;
+            fillEpochs = FILL_EPOCHS + 1;
+        } else {
+            nextEpoch = vlCVX.epochCount() - 1;
+            fillEpochs = FILL_EPOCHS;
+        }
         uint256 endEpoch;
-        unchecked { endEpoch = nextEpoch + FILL_EPOCHS; }
+        unchecked { endEpoch = nextEpoch + fillEpochs; }
 
         uint256 startEntry = nextEpoch >> 3;
         uint256 endEntry = (endEpoch - 1) >> 3;
@@ -219,6 +251,11 @@ contract Delegation {
 
     function userWeightAtEpochOf(uint256 _epoch, address _user) external view returns (uint256) {
         return _readMemWeight(userEpochWeights[_user][_epoch >> 3], _epoch & 7);
+    }
+
+    function getSyncSnapshot(address _user) external view returns (uint256 epoch, uint256 preSyncWeight, uint256 timestamp) {
+        SyncSnapshot memory snap = syncSnapshots[_user];
+        return (uint256(snap.epoch), uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.timestamp));
     }
 
     function _readMemWeight(EpochWeightingEntry memory entry, uint256 offset) internal pure returns (uint256) {

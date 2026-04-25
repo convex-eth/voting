@@ -681,4 +681,148 @@ contract DelegationTest is Test {
         assertEq(d1, delegateB);
         assertEq(se1, uint32(epoch2));
     }
+
+    function test_syncIncludesCurrentEpoch() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        warpToNextEpoch();
+
+        uint256 current = currentEpochIndex();
+        uint256 expected = mockVlCVX.balanceAtEpochOf(current, alice);
+        assertGt(expected, 0);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 0);
+
+        delegation.sync(alice);
+
+        assertWeightMatches(current, delegateA, expected);
+    }
+
+    function test_syncDoubleCallReturnsEarly() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        warpToNextEpoch();
+
+        delegation.sync(alice);
+
+        uint256 current = currentEpochIndex();
+        (uint256 snapEpoch1, uint256 snapWeight1, uint256 snapTs1) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch1, current);
+
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+
+        delegation.sync(alice);
+
+        (uint256 snapEpoch2, uint256 snapWeight2, uint256 snapTs2) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch2, snapEpoch1);
+        assertEq(snapWeight2, snapWeight1);
+        assertEq(snapTs2, snapTs1);
+
+        uint256 oldExpected = 1000 * WEIGHT_DIVISOR;
+        assertWeightMatches(current, delegateA, oldExpected);
+    }
+
+    function test_syncStoresSnapshot() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        warpToNextEpoch();
+
+        delegation.sync(alice);
+
+        warpToNextEpoch();
+
+        uint256 current = currentEpochIndex();
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+
+        uint256 preWeight = delegation.userWeightAtEpochOf(current, alice);
+        assertGt(preWeight, 0);
+
+        uint256 ts = block.timestamp;
+        delegation.sync(alice);
+
+        (uint256 snapEpoch, uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch, current);
+        assertEq(snapWeight, preWeight);
+        assertEq(snapTs, ts);
+    }
+
+    function test_syncNewEpochAllowsResync() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        warpToNextEpoch();
+
+        delegation.sync(alice);
+
+        uint256 epoch1 = currentEpochIndex();
+
+        (uint256 snapEpoch1,,) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch1, epoch1);
+
+        warpToNextEpoch();
+
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+
+        uint256 ts2 = block.timestamp;
+        delegation.sync(alice);
+
+        uint256 epoch2 = currentEpochIndex();
+        (uint256 snapEpoch2,, uint256 snapTs2) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch2, epoch2);
+        assertGt(snapEpoch2, snapEpoch1);
+        assertEq(snapTs2, ts2);
+
+        uint256 expected = mockVlCVX.balanceAtEpochOf(epoch2, alice);
+        assertUserWeightMatches(epoch2, alice, expected);
+        assertWeightMatches(epoch2, delegateA, expected);
+    }
+
+    function test_setDelegateDoesNotIncludeCurrentEpoch() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        warpToNextEpoch();
+
+        uint256 current = currentEpochIndex();
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 0);
+        assertEq(delegation.getUserWeight(alice), 0);
+    }
+
+    function test_syncSnapshotCapturesPreSyncWeight() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        warpToNextEpoch();
+
+        delegation.sync(alice);
+
+        warpToNextEpoch();
+
+        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+
+        uint256 current = currentEpochIndex();
+        uint256 preWeight = delegation.userWeightAtEpochOf(current, alice);
+
+        delegation.sync(alice);
+
+        (uint256 snapEpoch, uint256 snapWeight,) = delegation.getSyncSnapshot(alice);
+        assertEq(snapEpoch, current);
+        assertEq(snapWeight, preWeight);
+    }
 }
