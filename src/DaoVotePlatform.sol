@@ -225,12 +225,20 @@ contract DaoVotePlatform is Ownable2Step {
             _changeVoteTotals(proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
 
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
+            uint256 userBaseDiff = currentBalance - user.baseWeight;
             user.baseWeight = uint96(currentBalance);
 
             uint256 currentDelBal = delegation.balanceAtEpochOf(prop.epoch, _account);
             int256 delDelta = int256(currentDelBal) - int256(uint256(user.totalDelegationWeight));
             user.adjustedWeight += int96(delDelta);
             user.totalDelegationWeight = uint96(currentDelBal);
+
+            if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
+                delegation.sync(_account);
+
+                pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(userBaseDiff));
+                emit PendingWeightAdjustment(proposalId, user.delegate, -int256(userBaseDiff));
+            }
 
             int96 pend = pendingWeightAdjustment[proposalId][_account];
             if (pend != 0) {
