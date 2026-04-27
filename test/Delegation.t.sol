@@ -712,15 +712,14 @@ contract DelegationTest is Test {
         delegation.sync(alice);
 
         uint256 current = currentEpochIndex();
-        (uint256 snapEpoch1, uint256 snapWeight1, uint256 snapTs1) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch1, current);
+        (uint256 snapWeight1, uint256 snapTs1) = delegation.getSyncSnapshot(alice, current);
+        assertGt(snapTs1, 0);
 
         mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
-        (uint256 snapEpoch2, uint256 snapWeight2, uint256 snapTs2) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch2, snapEpoch1);
+        (uint256 snapWeight2, uint256 snapTs2) = delegation.getSyncSnapshot(alice, current);
         assertEq(snapWeight2, snapWeight1);
         assertEq(snapTs2, snapTs1);
 
@@ -749,8 +748,7 @@ contract DelegationTest is Test {
         uint256 ts = block.timestamp;
         delegation.sync(alice);
 
-        (uint256 snapEpoch, uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch, current);
+        (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice, current);
         assertEq(snapWeight, preWeight);
         assertEq(snapTs, ts);
     }
@@ -767,8 +765,8 @@ contract DelegationTest is Test {
 
         uint256 epoch1 = currentEpochIndex();
 
-        (uint256 snapEpoch1,,) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch1, epoch1);
+        (, uint256 snapTs1) = delegation.getSyncSnapshot(alice, epoch1);
+        assertGt(snapTs1, 0);
 
         warpToNextEpoch();
 
@@ -778,9 +776,8 @@ contract DelegationTest is Test {
         delegation.sync(alice);
 
         uint256 epoch2 = currentEpochIndex();
-        (uint256 snapEpoch2,, uint256 snapTs2) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch2, epoch2);
-        assertGt(snapEpoch2, snapEpoch1);
+        (, uint256 snapTs2) = delegation.getSyncSnapshot(alice, epoch2);
+        assertGt(snapTs2, snapTs1);
         assertEq(snapTs2, ts2);
 
         uint256 expected = mockVlCVX.balanceAtEpochOf(epoch2, alice);
@@ -821,8 +818,7 @@ contract DelegationTest is Test {
 
         delegation.sync(alice);
 
-        (uint256 snapEpoch, uint256 snapWeight,) = delegation.getSyncSnapshot(alice);
-        assertEq(snapEpoch, current);
+        (uint256 snapWeight,) = delegation.getSyncSnapshot(alice, current);
         assertEq(snapWeight, preWeight);
     }
 }

@@ -165,12 +165,12 @@ contract GaugeVotePlatform is Ownable2Step {
                 del.adjustedWeight -= int96(int256(baseWeight));
             } else {
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
-                (uint256 snapEpoch, uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account);
+                (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, epoch);
                 int256 weightToRemove;
 
-                if (snapEpoch == epoch && snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
+                if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
                     weightToRemove = int256(currentDelWeight);
-                } else if (snapEpoch == epoch && snapTs > 0) {
+                } else if (snapTs > 0) {
                     weightToRemove = int256(snapWeight);
                     int256 diff = int256(currentDelWeight) - int256(snapWeight);
                     if (diff > 0) {

@@ -26,9 +26,8 @@ contract Delegation {
     }
 
     struct SyncSnapshot {
-        uint64 timestamp;
+        uint96 timestamp;
         uint32 preSyncWeight;
-        uint32 epoch;
     }
 
     error NoDelegate();
@@ -38,7 +37,7 @@ contract Delegation {
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public delegateEpochWeights;
     mapping(address => uint256) public syncedUserEpoch;
-    mapping(address => SyncSnapshot) public syncSnapshots;
+    mapping(address => mapping(uint256 => SyncSnapshot)) public syncSnapshots;
 
     constructor(address _vlCVX) {
         vlCVX = IvlCVX(_vlCVX);
@@ -87,7 +86,7 @@ contract Delegation {
         vlCVX.checkpointEpoch();
         uint256 currentEpoch = vlCVX.epochCount() - 2;
 
-        if (syncSnapshots[_user].epoch == currentEpoch) return;
+        if (syncSnapshots[_user][currentEpoch].timestamp != 0) return;
 
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
@@ -101,10 +100,9 @@ contract Delegation {
         assembly {
             raw := mload(add(entry, mul(offset, 32)))
         }
-        syncSnapshots[_user] = SyncSnapshot({
-            epoch: uint32(currentEpoch),
+        syncSnapshots[_user][currentEpoch] = SyncSnapshot({
             preSyncWeight: uint32(raw),
-            timestamp: uint64(block.timestamp)
+            timestamp: uint96(block.timestamp)
         });
 
         _syncUser(_user, delegate, true);
@@ -253,9 +251,9 @@ contract Delegation {
         return _readMemWeight(userEpochWeights[_user][_epoch >> 3], _epoch & 7);
     }
 
-    function getSyncSnapshot(address _user) external view returns (uint256 epoch, uint256 preSyncWeight, uint256 timestamp) {
-        SyncSnapshot memory snap = syncSnapshots[_user];
-        return (uint256(snap.epoch), uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.timestamp));
+    function getSyncSnapshot(address _user, uint256 _epoch) external view returns (uint256 preSyncWeight, uint256 timestamp) {
+        SyncSnapshot memory snap = syncSnapshots[_user][_epoch];
+        return (uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.timestamp));
     }
 
     function _readMemWeight(EpochWeightingEntry memory entry, uint256 offset) internal pure returns (uint256) {
