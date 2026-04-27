@@ -400,7 +400,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
         assertEq(bw, 3000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -418,7 +418,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 daveBw, int256 daveAdj,,, address daveDel) = platform.userInfo(pid, dave);
+        (uint256 daveBw, int256 daveAdj,,, address daveDel, ) = platform.userInfo(pid, dave);
         assertEq(daveBw, 0);
         assertGt(daveAdj, 0);
         assertEq(daveDel, dave);
@@ -427,82 +427,6 @@ contract GaugeVotePlatformTest is Test {
 
         (,,,, int256 daveAdjAfter) = platform.getVote(pid, dave);
         assertLt(daveAdjAfter, daveAdj);
-    }
-
-    // ========== Scenario 6: updateUserWeight before voting ==========
-
-    function test_scenario6_updateUserWeightBeforeVoting() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-
-        (,,, bool hasUpdated,) = platform.userInfo(pid, alice);
-        assertTrue(hasUpdated);
-
-        assertEq(platform.pendingWeightAdjustment(pid, bob), int96(int256(200 * WD)));
-
-        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
-
-        (uint256 aliceBw,,,,) = platform.userInfo(pid, alice);
-        assertApproxEqAbs(aliceBw, 700 * WD, WD);
-
-        (,,,, int256 bobAdj) = platform.getVote(pid, bob);
-        assertEq(bobAdj, 0);
-        assertEq(platform.pendingWeightAdjustment(pid, bob), int96(0));
-
-        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
-
-        (,,,, int256 bobAdjAfter) = platform.getVote(pid, bob);
-        assertEq(bobAdjAfter, 0);
-        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
-    }
-
-    function test_updateUserWeightCannotCallAfterVoting() public {
-        _lockAndDelegate(alice, 1000, address(0));
-        _warpToNextEpoch();
-        uint256 pid = _createProposal();
-
-        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
-
-        vm.prank(alice);
-        vm.expectRevert(GaugeVotePlatform.AlreadyVoted.selector);
-        platform.updateUserWeight(alice);
-    }
-
-    function test_updateUserWeightCannotCallTwice() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-
-        vm.prank(alice);
-        vm.expectRevert(GaugeVotePlatform.AlreadyUpdated.selector);
-        platform.updateUserWeight(alice);
-    }
-
-    function test_updateUserWeightNoDiff() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-        _createProposal();
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
     }
 
     // ========== Scenario 7: Re-voting with weight change ==========
@@ -557,7 +481,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(surrogate);
         platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,, uint8 vs,,) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(1));
     }
 
@@ -575,7 +499,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        (,, uint8 vs,,) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(2));
     }
 
@@ -632,33 +556,6 @@ contract GaugeVotePlatformTest is Test {
 
         (,,,, int256 carolAdj) = platform.getVote(pid, carol);
         assertEq(carolAdj, 0);
-    }
-
-    // ========== updateUserWeight updates delegate gauge votes ==========
-
-    function test_updateUserWeightUpdatesDelegateGauges() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
-
-        uint256 g1Before = platform.gaugeTotal(pid, address(gauge1));
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-
-        uint256 g1Deferred = platform.gaugeTotal(pid, address(gauge1));
-        assertEq(g1Deferred, g1Before);
-
-        platform.forceUpdateDelegate(bob);
-
-        uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
-        assertGt(g1After, g1Before);
     }
 
     // ========== Ownership ==========
@@ -731,46 +628,6 @@ contract GaugeVotePlatformTest is Test {
         assertGt(platform.gaugeTotal(pid2, address(gauge2)), 0);
     }
 
-    // ========== hasUpdated flag causes baseWeight removal ==========
-
-    function test_hasUpdatedFlagUsesBaseWeight() public {
-        mockVlCVX.mockLock(alice, 555 * WD + 1, 555 * WD + 1);
-        vm.prank(alice);
-        delegation.setDelegate(bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-        uint256 pid = _createProposal();
-
-        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
-
-        uint256 aliceBal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        uint256 aliceDel = delegation.userWeightAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBal, aliceDel);
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-
-        (,,, bool hasUpdated,) = platform.userInfo(pid, alice);
-        assertTrue(hasUpdated);
-
-        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
-
-        (uint256 aliceBw,,,,) = platform.userInfo(pid, alice);
-        assertEq(aliceBw, aliceBal);
-    }
-
-    // ========== updateUserWeight is idempotent (no-op if diff == 0) ==========
-
-    function test_updateUserWeightNoopIfSameAsDelegated() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-        uint256 pid = _createProposal();
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-    }
-
     // ========== Force end disables voting ==========
 
     function test_forceEndDisablesVoting() public {
@@ -825,7 +682,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
         assertEq(bw, 1000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -916,41 +773,6 @@ contract GaugeVotePlatformTest is Test {
         assertEq(platform.gaugeTotal(pid2, address(gauge1)), 0);
     }
 
-    // ========== updateUserWeight time gate ==========
-
-    function test_updateUserWeightCannotCallAfterEndTime() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        (, uint256 endTime,) = platform.proposals(pid);
-        vm.warp(endTime + 1);
-
-        vm.prank(alice);
-        vm.expectRevert(GaugeVotePlatform.Ended.selector);
-        platform.updateUserWeight(alice);
-    }
-
-    function test_updateUserWeightCanCallBeforeEndTime() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        (, uint256 endTime,) = platform.proposals(pid);
-        vm.warp(endTime - 1);
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-    }
-
     // ========== isFinalized ==========
 
     function test_isFinalized() public {
@@ -979,50 +801,5 @@ contract GaugeVotePlatformTest is Test {
         platform.forceEndProposal();
 
         assertFalse(platform.isFinalized(pid));
-    }
-
-    // ========== Re-vote dust: pending + non-round split ==========
-
-    function test_revoteNoDustWithPendingAndNonRoundSplit() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        uint256 pid = _createProposal();
-
-        address[] memory g = new address[](3);
-        g[0] = address(gauge1);
-        g[1] = address(gauge2);
-        g[2] = address(gauge3);
-        uint256[] memory w = new uint256[](3);
-        w[0] = 3333;
-        w[1] = 3333;
-        w[2] = 3334;
-
-        vm.prank(bob);
-        platform.vote(bob, g, w);
-
-        uint256 g1Before = platform.gaugeTotal(pid, address(gauge1));
-        uint256 g2Before = platform.gaugeTotal(pid, address(gauge2));
-        uint256 g3Before = platform.gaugeTotal(pid, address(gauge3));
-        uint256 totalBefore = platform.voteTotals(pid);
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-
-        vm.prank(bob);
-        platform.vote(bob, g, w);
-
-        uint256 g1After = platform.gaugeTotal(pid, address(gauge1));
-        uint256 g2After = platform.gaugeTotal(pid, address(gauge2));
-        uint256 g3After = platform.gaugeTotal(pid, address(gauge3));
-        uint256 totalAfter = platform.voteTotals(pid);
-
-        assertEq(g1After, g1Before + 200 * WD * 3333 / 10000);
-        assertEq(g2After, g2Before + 200 * WD * 3333 / 10000);
-        assertEq(g3After, g3Before + 200 * WD * 3334 / 10000);
-        assertEq(totalAfter, totalBefore + 200 * WD);
     }
 }

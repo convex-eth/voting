@@ -252,25 +252,6 @@ contract GasProfile is Test {
     }
 
     // ──────────────────────────────────────────────────────
-    // Profile: updateUserWeight with delegate already voted (1 gauge)
-    // ──────────────────────────────────────────────────────
-    function test_gas_updateUserWeight_delegateVoted_1gauge() public {
-        _lockAndDelegate(alice, 500, bob);
-        _lockAndDelegate(bob, 2000, address(0));
-        _warpToNextEpoch();
-
-        mockVlCVX.mockRelock(alice, 0, 700 * WD);
-
-        _createProposal();
-
-        vm.prank(bob);
-        platform.vote(bob, _gauges1(address(gauge1)), _weights1(10000));
-
-        vm.prank(alice);
-        platform.updateUserWeight(alice);
-    }
-
-    // ──────────────────────────────────────────────────────
     // Profile: Surrogate votes for user (no delegate, 1 gauge)
     // ──────────────────────────────────────────────────────
     function test_gas_surrogateVote_1gauge() public {
