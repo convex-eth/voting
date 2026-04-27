@@ -14,7 +14,6 @@ contract DaoVotePlatform is Ownable2Step {
     error PrevNotEnded();
     error BadTime();
     error AlreadyVoted();
-    error AlreadyUpdated();
     error NotVoteAuth();
     error NotSigner();
     error NotOperator();
@@ -29,6 +28,7 @@ contract DaoVotePlatform is Ownable2Step {
     uint256 public constant epochDuration = 86400 * 7;
     uint256 public constant finalizationTime = 12 hours;
     uint256 public constant max_weight = 10000;
+    uint256 private constant WEIGHT_DIVISOR = 1e17;
 
     enum VoteStatus {
         None,
@@ -39,11 +39,12 @@ contract DaoVotePlatform is Ownable2Step {
     struct UserInfo {
         uint96 baseWeight;
         int96 adjustedWeight;
+        uint48 lastVoteTime;
         uint16 yesWeight;
         uint16 noWeight;
         uint8 voteStatus;
-        bool hasUpdated;
         address delegate;
+        uint96 totalDelegationWeight;
     }
 
     struct Proposal {
@@ -158,51 +159,54 @@ contract DaoVotePlatform is Ownable2Step {
             delegate = _account;
         }
 
+        if (delegate != _account) {
+            uint256 delWeight = delegation.userWeightAtEpochOf(epoch, _account);
+            uint256 truncatedBase = (baseWeight / WEIGHT_DIVISOR) * WEIGHT_DIVISOR;
+            if (truncatedBase > delWeight) {
+                delegation.sync(_account);
+            }
+        }
+
+        uint256 totalDelWeight = delegation.balanceAtEpochOf(epoch, _account);
+
         user.baseWeight = uint96(baseWeight);
         user.delegate = delegate;
-        user.adjustedWeight += int96(int256(delegation.balanceAtEpochOf(epoch, _account)));
+        user.adjustedWeight += int96(int256(totalDelWeight));
+        user.totalDelegationWeight = uint96(totalDelWeight);
 
         userInfo[_proposalId][_account] = user;
 
         emit UserWeightChange(_proposalId, _account, baseWeight, user.adjustedWeight);
 
         if (delegate != _account) {
-            int256 weightToRemove;
-            if (user.hasUpdated) {
-                weightToRemove = int256(baseWeight);
-            } else {
-                weightToRemove = int256(delegation.userWeightAtEpochOf(epoch, _account));
-            }
-
             UserInfo storage del = userInfo[_proposalId][delegate];
-            int96 pending = pendingWeightAdjustment[_proposalId][delegate];
-            if (pending != 0) {
-                pendingWeightAdjustment[_proposalId][delegate] = 0;
+
+            if (del.voteStatus == 0) {
+                del.adjustedWeight -= int96(int256(baseWeight));
+            } else {
+                uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
+                (uint256 snapEpoch, uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account);
+                int256 weightToRemove;
+
+                if (snapEpoch == epoch && snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
+                    weightToRemove = int256(currentDelWeight);
+                } else if (snapEpoch == epoch && snapTs > 0) {
+                    weightToRemove = int256(snapWeight);
+                    int256 diff = int256(currentDelWeight) - int256(snapWeight);
+                    if (diff > 0) {
+                        pendingWeightAdjustment[_proposalId][delegate] -= int96(diff);
+                        emit PendingWeightAdjustment(_proposalId, delegate, -diff);
+                    }
+                } else {
+                    weightToRemove = int256(currentDelWeight);
+                }
+
+                _changeVoteTotals(_proposalId, -weightToRemove, del.yesWeight, del.noWeight);
+                del.adjustedWeight -= int96(weightToRemove);
             }
 
-            if (del.voteStatus > 0) {
-                int256 netDelta = int256(pending) - weightToRemove;
-                _changeVoteTotals(_proposalId, netDelta, del.yesWeight, del.noWeight);
-            }
-
-            del.adjustedWeight = del.adjustedWeight + pending - int96(weightToRemove);
             emit UserWeightChange(_proposalId, delegate, del.baseWeight, del.adjustedWeight);
         }
-    }
-
-    function _applyPending(uint256 _proposalId, address _account, uint8 _voteStatus) internal {
-        int96 pending = pendingWeightAdjustment[_proposalId][_account];
-        if (pending == 0) return;
-
-        pendingWeightAdjustment[_proposalId][_account] = 0;
-        userInfo[_proposalId][_account].adjustedWeight += pending;
-
-        if (_voteStatus > 0) {
-            UserInfo storage u = userInfo[_proposalId][_account];
-            _changeVoteTotals(_proposalId, int256(pending), u.yesWeight, u.noWeight);
-        }
-
-        emit UserWeightChange(_proposalId, _account, userInfo[_proposalId][_account].baseWeight, userInfo[_proposalId][_account].adjustedWeight);
     }
 
     function _vote(address _account, uint256 _yesWeight, uint256 _noWeight) internal {
@@ -215,26 +219,29 @@ contract DaoVotePlatform is Ownable2Step {
         _initBaseInfo(_account, proposalId);
 
         UserInfo storage user = userInfo[proposalId][_account];
-        int256 userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
-        if (userWeight <= 0) revert NoWeight();
 
         if (user.voteStatus > 0) {
-            _changeVoteTotals(proposalId, -userWeight, user.yesWeight, user.noWeight);
+            int256 oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
+            _changeVoteTotals(proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
 
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
-            if (currentBalance != uint256(user.baseWeight)) {
-                user.baseWeight = uint96(currentBalance);
-                emit UserWeightChange(proposalId, _account, currentBalance, user.adjustedWeight);
+            user.baseWeight = uint96(currentBalance);
+
+            uint256 currentDelBal = delegation.balanceAtEpochOf(prop.epoch, _account);
+            int256 delDelta = int256(currentDelBal) - int256(uint256(user.totalDelegationWeight));
+            user.adjustedWeight += int96(delDelta);
+            user.totalDelegationWeight = uint96(currentDelBal);
+
+            int96 pend = pendingWeightAdjustment[proposalId][_account];
+            if (pend != 0) {
+                pendingWeightAdjustment[proposalId][_account] = 0;
+                user.adjustedWeight += pend;
             }
+
+            emit UserWeightChange(proposalId, _account, user.baseWeight, user.adjustedWeight);
         }
 
-        int96 pend = pendingWeightAdjustment[proposalId][_account];
-        if (pend != 0) {
-            pendingWeightAdjustment[proposalId][_account] = 0;
-            user.adjustedWeight += pend;
-        }
-
-        userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
+        int256 userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
         if (userWeight <= 0) revert NoWeight();
 
         user.yesWeight = uint16(_yesWeight);
@@ -242,6 +249,8 @@ contract DaoVotePlatform is Ownable2Step {
         _changeVoteTotals(proposalId, userWeight, _yesWeight, _noWeight);
 
         emit VoteCast(proposalId, _account, _yesWeight, _noWeight);
+
+        user.lastVoteTime = uint48(block.timestamp);
 
         if (user.voteStatus == 0) {
             user.voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
@@ -259,38 +268,6 @@ contract DaoVotePlatform is Ownable2Step {
         if (msg.sender == _account && vs == uint8(VoteStatus.VotedViaSurrogate)) {
             userInfo[proposalId][_account].voteStatus = uint8(VoteStatus.Voted);
         }
-    }
-
-    function updateUserWeight(address _account) external onlyAcceptedSigner(_account) {
-        uint256 proposalId = proposals.length - 1;
-        if (block.timestamp > proposals[proposalId].endTime) revert Ended();
-        if (userInfo[proposalId][_account].voteStatus != 0) revert AlreadyVoted();
-        if (userInfo[proposalId][_account].hasUpdated) revert AlreadyUpdated();
-
-        uint256 epoch = proposals[proposalId].epoch;
-        uint256 currentBalance = vlCVX.balanceAtEpochOf(epoch, _account);
-        uint256 delegatedWeight = delegation.userWeightAtEpochOf(epoch, _account);
-
-        if (currentBalance == delegatedWeight) return;
-
-        int256 diff = int256(currentBalance) - int256(delegatedWeight);
-
-        userInfo[proposalId][_account].hasUpdated = true;
-
-        address delegate = delegation.getDelegateAtEpoch(_account, epoch);
-        if (delegate == address(0)) {
-            delegate = _account;
-        }
-
-        if (delegate != _account) {
-            pendingWeightAdjustment[proposalId][delegate] += int96(diff);
-            emit PendingWeightAdjustment(proposalId, delegate, diff);
-        }
-    }
-
-    function forceUpdateDelegate(address _delegate) external {
-        uint256 proposalId = proposals.length - 1;
-        _applyPending(proposalId, _delegate, userInfo[proposalId][_delegate].voteStatus);
     }
 
     function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
