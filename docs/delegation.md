@@ -37,12 +37,42 @@ vlCVX balances change when users lock, relock, or let locks expire. The Delegati
 
 ### sync(_user)
 
-Propagates the user's current vlCVX balance into the weight tables for the next 16 epochs (`FILL_EPOCHS`). It reads `vlCVX.balanceAtEpochOf(epoch, user)` for each future epoch and writes the delta into the delegate's weight table.
+Propagates the user's current vlCVX balance into the weight tables. Unlike `setDelegate`, `sync()` also writes weight for the **current epoch** (not just future epochs).
 
-- If the user has no delegate, returns gracefully (no-op)
-- If the delegate is `address(0)`, returns gracefully
-- Syncs forward from the next epoch — does not touch past epochs
-- The `syncedUserEpoch[user]` tracks how far forward the user has been synced
+Behavior:
+1. Calls `vlCVX.checkpointEpoch()`
+2. If this user has already been synced this epoch (tracked via `syncSnapshots[user].epoch == currentEpoch`), returns early — no double-sync within the same epoch
+3. Reads the user's current delegation state (delegate, pre-sync weight)
+4. Stores a `SyncSnapshot` for the user containing:
+   - `epoch` — the epoch this snapshot was taken
+   - `preSyncWeight` — the user's delegation weight BEFORE this sync (as uint32, truncated)
+   - `timestamp` — `block.timestamp` when sync was called
+5. Then calls `_syncUser` with `includeCurrentEpoch = true`, which starts from `epochCount() - 2` (current epoch) and writes through `FILL_EPOCHS + 1` future epochs
+
+The snapshot allows voting contracts to determine whether a delegate voted before or after a sync, which affects which weight value to use when removing a delegatee's weight from a delegate's adjusted weight.
+
+### Sync Snapshot
+
+The `SyncSnapshot` struct is packed into a single storage slot:
+
+```
+struct SyncSnapshot {
+    uint64 timestamp;    // block.timestamp when sync was called
+    uint32 preSyncWeight; // user's delegation weight before this sync (truncated)
+    uint32 epoch;        // epoch number of this sync
+}
+```
+
+The `getSyncSnapshot(address)` view function returns `(epoch, preSyncWeight, timestamp)` as `uint256` values, with `preSyncWeight` already multiplied by `WEIGHT_DIVISOR` to match the scale used by voting contracts.
+
+### setDelegate vs sync
+
+- `setDelegate`: Only writes weights for **future** epochs (starts at `epochCount() - 1`). Does NOT write current epoch.
+- `sync`: Writes weights for **current + future** epochs (starts at `epochCount() - 2`). Also stores the sync snapshot.
+
+This means:
+- `setDelegate` is for changing who you delegate to — takes effect next epoch
+- `sync` is for updating your weight after a vlCVX balance change — takes effect immediately (current epoch)
 
 ### When to Sync
 
@@ -55,7 +85,7 @@ Propagates the user's current vlCVX balance into the weight tables for the next 
 
 Without syncing, the delegate's voting weight on future proposals will not reflect the updated vlCVX balance.
 
-**Important**: Sync is forward-looking only. It writes weights for the next 16 epochs. If a proposal was created in the same epoch that sync was called, the proposal will have the old weight baked in.
+The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `sync(user)` during `_initBaseInfo` if they detect that the user's vlCVX balance (truncated) exceeds their Delegation weight. This ensures mid-proposal weight increases are properly reflected. The sync is idempotent per epoch — calling it again in the same epoch returns early.
 
 ## Interaction with Voting Contracts
 
@@ -66,6 +96,8 @@ Both `GaugeVotePlatform` and `DaoVotePlatform` read from the Delegation contract
 1. `delegation.getDelegateAtEpoch(user, epoch)` — finds who the user delegated to during the proposal's epoch
 2. `delegation.balanceAtEpochOf(delegate, epoch)` — the delegate's total accumulated delegatee weight
 3. `delegation.userWeightAtEpochOf(user, epoch)` — the user's own truncated weight (used for removing from delegate)
+4. `delegation.sync(user)` — called when the user's vlCVX balance exceeds their Delegation weight (truncated comparison)
+5. `delegation.getSyncSnapshot(user)` — returns `(epoch, preSyncWeight, timestamp)` used for timestamp-based weight removal in voting contracts
 
 ### The Truncation Problem
 
@@ -75,32 +107,32 @@ Because Delegation stores weights as `uint32 / 1e17` (truncated), there can be a
 - Delegation stores `5555` (= `555.5 * 1e17`), which when read back gives `555.5 * 1e18`
 - The diff is `1 wei` — negligible but non-zero
 
-### updateUserWeight on Active Proposals
+### Mid-Proposal Weight Updates (Automatic Flow)
 
-When a user adds vlCVX weight mid-proposal (via lock/relock + sync), their delegate's voting weight on that proposal doesn't automatically update. The user has two options:
+When a user adds vlCVX weight mid-proposal (via lock/relock + sync), their delegate's voting weight on that proposal doesn't automatically update. The new flow handles this automatically:
 
-**Option 1: Vote directly.** Re-voting (calling `vote()` again) refreshes the user's `baseWeight` from vlCVX and applies any pending adjustments. The simplest approach.
+**When `_initBaseInfo` detects a weight mismatch:** If `(vlCVX_balance / 1e17) * 1e17 > delegation.userWeightAtEpochOf()`, the voting contract calls `delegation.sync(user)` to bring delegation weights up to date.
 
-**Option 2: Call `updateUserWeight()` on the proposal.** This pushes the vlCVX/Delegation diff to the delegate via `pendingWeightAdjustment`. The delegate's weight (and thus their vote allocation) is updated when they next vote or when `forceUpdateDelegate()` is called. This is useful when the delegate has already voted and the delegatee wants to update their contribution without changing the delegate's vote direction.
+**Timestamp-based weight removal:** When a delegatee is initialized and their delegate has already voted, the voting contract compares timestamps:
+- If the delegate voted **after** the sync: the full current delegation weight is the correct amount to remove
+- If the delegate voted **before** the sync: the pre-sync snapshot weight should be removed, and the difference becomes a negative pending adjustment on the delegate (picked up on the delegate's next vote)
 
-Rules for `updateUserWeight`:
-- Only callable before the user has voted
-- Only callable once per proposal
-- Only callable while the proposal is active (before `endTime`)
-- No-op if vlCVX and Delegation weights match (no diff)
+**On re-vote:** If a user's baseWeight grew (from relocking), the growth is pushed to the delegate's `pendingWeightAdjustment` as a negative amount. When the delegate re-votes, they process their own pending, which adds this weight back to their adjusted weight.
 
 ### Weight Flow Example
 
 ```
-1. Alice has 1000 vlCVX, delegates to Bob
-2. Delegation stores: userEpochWeights[Alice][e] = 10000, delegateEpochWeights[Bob][e] += 10000
-3. Proposal created at epoch E
-4. Alice relocks, gaining 200 more vlCVX → now has 1200 vlCVX
-5. Alice calls sync() → Delegation updates future epochs to 12000
-6. But proposal epoch E still has 10000 in Delegation's tables
-7. Alice calls updateUserWeight() on the proposal
-8. This records a pending adjustment of +200 (vlCVX diff vs Delegation truncated value)
-9. When Bob votes (or forceUpdateDelegate is called), the +200 is applied to Bob's weight
+1. Alice has 200 vlCVX, delegates to Bob
+2. Bob has 2000 vlCVX, votes with weight 2200 (his 2000 + Alice's 200)
+3. Alice relocks, gaining 500 more vlCVX → now has 700 vlCVX
+4. Alice calls sync() on Delegation
+5. Alice re-votes on the proposal:
+   - Weight refresh detects baseWeight grew from 200 to 700 (diff = 500)
+   - Since Alice has a delegate (Bob), pendingWeightAdjustment[Bob] -= 500
+   - Alice votes with her new weight
+6. When Bob re-votes:
+   - Bob processes his pending (-500), adjusted by +500
+   - Bob's vote now includes the additional weight from Alice's relock
 ```
 
 ## View Functions
@@ -113,5 +145,6 @@ Rules for `updateUserWeight`:
 | `userWeightAtEpochOf(epoch, user)` | User's own truncated weight at a specific epoch |
 | `getDelegateAtEpoch(user, epoch)` | Who the user delegated to at a given epoch |
 | `syncedUserEpoch(user)` | The epoch up to which the user has been synced |
+| `getSyncSnapshot(user)` | `(epoch, preSyncWeight, timestamp)` — preSyncWeight multiplied by WEIGHT_DIVISOR |
 
-All weight-returning functions multiply by `WEIGHT_DIVISOR` (1e17) to convert back from the truncated uint32 representation.
+All weight-returning functions (except `getSyncSnapshot`) multiply by `WEIGHT_DIVISOR` (1e17) to convert back from the truncated uint32 representation.

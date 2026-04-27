@@ -9,7 +9,7 @@ DaoVotePlatform is a yes/no DAO voting contract for vlCVX holders and their dele
 | Contract | Role |
 |---|---|
 | **vlCVX** (`IvlCVX`) | Base voting weight via `balanceAtEpochOf(epoch, user)` |
-| **Delegation** | Delegate addresses and aggregated weight data |
+| **Delegation** | Delegate addresses, aggregated weight data, and `sync()` |
 | **SurrogateRegistry** | Allows registered surrogates to vote on behalf of another address |
 
 No GaugeRegistry — there are no gauges to validate.
@@ -23,30 +23,20 @@ No GaugeRegistry — there are no gauges to validate.
 
 ### Vote Types
 
-Curve DAO has two categories of governance votes, modeled as the `VoteType` enum:
-
 | VoteType | Value | Purpose | Typical Quorum |
 |---|---|---|---|
 | `Ownership` | 0 | Major admin actions: changing contract ownership, upgrading implementations, modifying critical parameters | Higher (e.g. 30%+) |
 | `Parameter` | 1 | Routine parameter changes: adjusting fees, rates, limits, rewards | Lower (e.g. 15%+) |
 
-The `voteType` is set at proposal creation and stored on-chain in the `Proposal` struct. It does not affect voting mechanics within this contract — all proposals use the same voting flow. The distinction exists so that off-chain infrastructure and execution layers can:
-
-1. Display the vote category to voters
-2. Apply different quorum thresholds when interpreting results
-3. Route approved proposals to the appropriate execution path
-
-Quorum enforcement is intentionally **not** done on-chain in this contract. The vote type is purely informational metadata that consumers of the results use to determine if the vote meets the required threshold for its category.
+The `voteType` is purely informational metadata — it does not affect voting mechanics. Quorum enforcement is intentionally **not** done on-chain.
 
 ### Finalization Window
 
 After voting ends at `endTime`, there is a **finalization window** of 12 hours (`finalizationTime`). During this window:
 
 - **No voting** — all voting ends at `endTime`, no exceptions
-- **Operator can force-end** — `forceEndProposal()` zeros out `startTime`, `endTime`, and `epoch`, cancelling the proposal
+- **Operator can force-end** — `forceEndProposal()` zeros out `startTime`, `endTime`, and `epoch`
 - After the window (`block.timestamp > endTime + finalizationTime`), the proposal is **finalized** via `isFinalized()` and can no longer be force-ended
-
-This window exists so a guardian or governance layer can veto a malicious proposal before results are considered final.
 
 ### Lifecycle
 
@@ -64,7 +54,8 @@ Identical to GaugeVotePlatform. See `gauge_voting.md` — Delegation Depth, Weig
 - Depth 1 only
 - `_initBaseInfo` is called lazily when voting, never recursively
 - `adjustedWeight` can go negative temporarily, nets to >= 0
-- `hasUpdated` flag controls whether `baseWeight` or truncated `delegation.userWeightAtEpochOf()` is used for delegate weight removal
+- Timestamp-based weight removal with sync snapshots
+- `pendingWeightAdjustment` tracks weight changes for delegates to pick up on their next vote
 
 ## Voting
 
@@ -83,32 +74,38 @@ Called by the user directly or by their registered surrogate. Weights are in bas
 1. `_initBaseInfo` — initialize user, handle delegate weight removal
 2. Record `_yesWeight` and `_noWeight` on user
 3. Add `userWeight * _yesWeight / 10000` to `yesTotal`, `userWeight * _noWeight / 10000` to `noTotal`
-4. Set `voteStatus`, add to `votedUsers`
+4. Set `voteStatus`, record `lastVoteTime`, add to `votedUsers`
 
 **Re-voting (changing vote or updating weight):**
-1. Calculate `userWeight = baseWeight + adjustedWeight`
-2. Remove old vote: distribute `-userWeight` across yes/no proportionally using stored weights
-3. Refresh `baseWeight` from vlCVX (same auto-refresh as GaugeVotePlatform)
-4. Apply pending weight adjustments (also distributed proportionally)
-5. Record new `_yesWeight` and `_noWeight`
-6. Distribute new `userWeight` across yes/no using new weights
+1. Calculate `oldUserWeight = baseWeight + adjustedWeight`
+2. Remove old vote: distribute `-oldUserWeight` across yes/no proportionally using stored weights
+3. Refresh `baseWeight` from vlCVX
+4. Compute delegation delta, update `adjustedWeight` and `totalDelegationWeight`
+5. If baseWeight grew and user has a delegate: sync delegation, add `-userBaseDiff` to delegate's pending
+6. Process own pending: `adjustedWeight += pending`, clear pending
+7. Record new `_yesWeight` and `_noWeight`
+8. Distribute new `userWeight` across yes/no using new weights
 
 A user can re-vote to change their split, flip entirely, or keep the same split (to update weight).
 
 ### Proportional Distribution
 
-When a delegate's weight changes (from delegatee initialization or pending adjustments), the delta is distributed across yes/no proportionally to the delegate's stored split:
+When a delegate's weight changes (from delegatee initialization), the delta is distributed across yes/no proportionally to the delegate's stored split:
 
 ```
 yesDelta = totalDelta * yesWeight / 10000
 noDelta  = totalDelta * noWeight  / 10000
 ```
 
-This is handled by `_changeVoteTotals()` which is used in `_initBaseInfo`, `_applyPending`, and `_vote`.
+This is handled by `_changeVoteTotals()` which is used in `_initBaseInfo` and `_vote`.
 
-### updateUserWeight(_account)
+### No updateUserWeight
 
-Identical to GaugeVotePlatform. Pushes vlCVX/delegation weight diff to delegate via `pendingWeightAdjustment`. Only callable before voting, at most once. The pending is applied when the delegate votes or via `forceUpdateDelegate()`.
+The old `updateUserWeight` / `forceUpdateDelegate` pattern has been removed. Weight changes flow automatically:
+- Users sync on the Delegation contract after relocking
+- Re-voting picks up baseWeight changes and delegation deltas
+- Delegate weight growth is pushed to delegate's `pendingWeightAdjustment`
+- The delegate processes pending on their own next vote
 
 ## Vote Totals Storage
 
@@ -121,8 +118,6 @@ VoteTotals { uint128 yes; uint128 no; }
 - `getYes(pid)` — returns yes total
 - `getNo(pid)` — returns no total
 - `voteTotals(pid)` — view function, returns `yes + no` (no separate storage write)
-
-When delegatee weight adjustments affect a delegate who has already voted, the delta is distributed across yes/no proportionally to the delegate's split (e.g. if delegate voted 60/40 yes/no, a delta of +100 adds +60 to yes and +40 to no).
 
 ## Differences from GaugeVotePlatform
 
@@ -151,8 +146,6 @@ VoteExecutor takes a finalized DAO proposal's results and submits them on-chain 
 | **Anyone** | After `isFinalized()` (past the 12-hour finalization window) |
 | **Guardian** | After `isFinished()` (voting ended, during the finalization window) |
 
-Guardians are set by the contract owner via `setGuardian(address, bool)`. This allows a governance layer to push results on-chain quickly if desired, or veto by force-ending the proposal instead.
-
 ### Execution Flow
 
 1. Verify proposal is finished (`endTime` has passed)
@@ -161,15 +154,3 @@ Guardians are set by the contract owner via `setGuardian(address, bool)`. This a
 4. Read proposal's `proposalId`, `voteType`, yes/no totals from DaoVotePlatform
 5. Call `DaoVoteWithWeights(proposalId, yes, no, isOwnership)` on the extension
 6. Mark `executed[proposalId] = true`
-
-### Key Differences from GaugeExecutor
-
-| Aspect | GaugeExecutor | VoteExecutor |
-|---|---|---|
-| Latest proposal check | Required | No — multiple proposals can execute in any order |
-| Epoch check | Must be current epoch | None — can execute anytime |
-| Access control | Permissionless | Permissionless after finalized, guardian during finalization |
-| Output | Arrays of gauges + bps weights | Single `(voteId, yay, nay, isOwnership)` call |
-| Weight calculation | Contract computes bps from totals | Passes raw yes/no totals directly |
-| State tracking | Gauge count + running weight (packed) | Simple `bool executed` per proposal |
-| Ownership | None | Ownable2Step — owner manages guardians |
