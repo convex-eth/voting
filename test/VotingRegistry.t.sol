@@ -21,7 +21,7 @@ contract VotingRegistryTest is Test {
         vm.prank(owner);
         registry.setVotingContract("Convex", registry.VOTE_DAO(), daoAddr);
 
-        assertEq(registry.getVotingContract("Convex", registry.VOTE_DAO()), daoAddr);
+        assertEq(registry.getAddress("Convex", registry.VOTE_DAO()), daoAddr);
     }
 
     function test_multiplePlatforms() public {
@@ -31,10 +31,10 @@ contract VotingRegistryTest is Test {
         registry.setVotingContract("Curve", registry.VOTE_DAO(), makeAddr("curveDao"));
         vm.stopPrank();
 
-        assertEq(registry.getVotingContract("Convex", registry.VOTE_DAO()), daoAddr);
-        assertEq(registry.getVotingContract("Convex", registry.VOTE_GAUGE()), gaugeAddr);
-        assertEq(registry.getVotingContract("Curve", registry.VOTE_DAO()), makeAddr("curveDao"));
-        assertEq(registry.getVotingContract("Curve", registry.VOTE_GAUGE()), address(0));
+        assertEq(registry.getAddress("Convex", registry.VOTE_DAO()), daoAddr);
+        assertEq(registry.getAddress("Convex", registry.VOTE_GAUGE()), gaugeAddr);
+        assertEq(registry.getAddress("Curve", registry.VOTE_DAO()), makeAddr("curveDao"));
+        assertEq(registry.getAddress("Curve", registry.VOTE_GAUGE()), address(0));
     }
 
     function test_onlyOwnerCanSet() public {
@@ -52,7 +52,7 @@ contract VotingRegistryTest is Test {
         registry.setVotingContract("Convex", registry.VOTE_DAO(), newDao);
         vm.stopPrank();
 
-        assertEq(registry.getVotingContract("Convex", registry.VOTE_DAO()), newDao);
+        assertEq(registry.getAddress("Convex", registry.VOTE_DAO()), newDao);
     }
 
     function test_customVoteType() public {
@@ -61,11 +61,11 @@ contract VotingRegistryTest is Test {
         vm.prank(owner);
         registry.setVotingContract("Convex", 3, custom);
 
-        assertEq(registry.getVotingContract("Convex", 3), custom);
+        assertEq(registry.getAddress("Convex", 3), custom);
     }
 
     function test_unsetReturnsZero() public view {
-        assertEq(registry.getVotingContract("NonExistent", registry.VOTE_DAO()), address(0));
+        assertEq(registry.getAddress("NonExistent", registry.VOTE_DAO()), address(0));
     }
 
     function test_eventEmitted() public {
@@ -86,7 +86,7 @@ contract VotingRegistryTest is Test {
         vm.stopPrank();
 
         for (uint256 i = 0; i < 5; i++) {
-            assertEq(registry.getVotingContract(platforms[i], registry.VOTE_DAO()), daos[i]);
+            assertEq(registry.getAddress(platforms[i], registry.VOTE_DAO()), daos[i]);
         }
     }
 }

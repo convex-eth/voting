@@ -15,12 +15,12 @@ contract VotingRegistry is Ownable2Step {
 
     event VotingContractSet(string indexed platform, uint8 indexed voteType, address indexed votingContract);
 
-    mapping(string => mapping(uint8 => address)) public getVotingContract;
+    mapping(string => mapping(uint8 => address)) public getAddress;
 
     constructor(address _owner) Ownable(_owner) {}
 
     function setVotingContract(string calldata _platform, uint8 _voteType, address _votingContract) external onlyOwner {
-        getVotingContract[_platform][_voteType] = _votingContract;
+        getAddress[_platform][_voteType] = _votingContract;
         emit VotingContractSet(_platform, _voteType, _votingContract);
     }
 }
