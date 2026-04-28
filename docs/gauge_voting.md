@@ -10,7 +10,7 @@ GaugeVotePlatform is a Convex gauge voting contract that allows vlCVX holders an
 |---|---|
 | **vlCVX** (`IvlCVX`) | Provides `balanceAtEpochOf(epoch, user)` for base voting weight, `checkpointEpoch()` + `epochCount()` for epoch indexing |
 | **Delegation** | Provides delegate addresses, aggregated weight data, and `sync()` for mid-epoch weight updates |
-| **GaugeRegistry** | Validates that voted addresses are active Curve gauges |
+| **CurveGaugeRegistry** | Validates that voted addresses are active Curve gauges |
 | **SurrogateRegistry** | Allows a registered surrogate to vote on behalf of another address |
 
 ## Proposals
@@ -121,7 +121,7 @@ Called by the user directly or by their registered surrogate.
 - `_gauges.length == _weights.length`
 - Each `_weights[i] > 0`
 - Sum of `_weights <= max_weight (10000)`
-- Each `_gauges[i]` must be a valid gauge via `GaugeRegistry.isValidGauge()`
+- Each `_gauges[i]` must be a valid gauge via `CurveGaugeRegistry.isValidGauge()`
 - Effective voting weight (`baseWeight + adjustedWeight`) must be > 0
 
 **Re-voting (changing vote):**
@@ -353,7 +353,7 @@ The execution output is: for each gauge in the list, `percentage = gaugeTotals[p
 
 | Data | Source |
 |---|---|
-| List of all voteable gauges | `GaugeRegistry` iteration or helper |
+| List of all voteable gauges | `CurveGaugeRegistry` iteration or helper |
 | Current gauge vote weights | `gaugeTotal(pid, gauge)` + `getGaugeCount(pid)` / `getGaugeEntry(pid, i)` |
 | Your personal vote (gauges + weights) | `getVote(pid, user)` |
 | Your baseWeight and adjustedWeight | `userInfo[pid][user]` |

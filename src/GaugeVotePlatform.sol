@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import "./GaugeRegistry.sol";
+import "./interface/IGaugeRegistry.sol";
 import "./SurrogateRegistry.sol";
 import "./Delegation.sol";
 import "./interface/IvlCVX.sol";
@@ -25,7 +25,7 @@ contract GaugeVotePlatform is Ownable2Step {
     mapping(address => bool) public operators;
 
     IvlCVX public immutable vlCVX;
-    GaugeRegistry public immutable gaugeRegistry;
+    IGaugeRegistry public immutable gaugeRegistry;
     SurrogateRegistry public immutable surrogateRegistry;
     Delegation public immutable delegation;
 
@@ -393,12 +393,12 @@ contract GaugeVotePlatform is Ownable2Step {
     event OperatorSet(address indexed op, bool active);
     event EqualizerAccountSet(address indexed eq, bool active);
 
-    constructor(address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
-        Ownable(msg.sender)
+    constructor(address _owner, address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
+        Ownable(_owner)
     {
-        operators[msg.sender] = true;
+        operators[_owner] = true;
         vlCVX = IvlCVX(_vlCVX);
-        gaugeRegistry = GaugeRegistry(_gaugeRegistry);
+        gaugeRegistry = IGaugeRegistry(_gaugeRegistry);
         surrogateRegistry = SurrogateRegistry(_surrogateRegistry);
         delegation = Delegation(_delegation);
     }

@@ -6,16 +6,16 @@ import "../src/DaoVotePlatform.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
-import "../src/VoteExecutor.sol";
+import "../src/CurveVoteExecutor.sol";
 import "./mocks/MockVlCVX.sol";
 import "./mocks/MockVoteDelegationExtension.sol";
 
-contract VoteExecutorTest is Test {
+contract CurveVoteExecutorTest is Test {
     MockVlCVX internal mockVlCVX;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal dao;
-    VoteExecutor internal executor;
+    CurveVoteExecutor internal executor;
     MockVoteDelegationExtension internal voteDelegate;
 
     address internal alice = makeAddr("alice");
@@ -34,6 +34,7 @@ contract VoteExecutorTest is Test {
         surrogateRegistry = new SurrogateRegistry();
 
         dao = new DaoVotePlatform(
+            address(this),
             address(mockVlCVX),
             address(surrogateRegistry),
             address(delegation)
@@ -42,7 +43,7 @@ contract VoteExecutorTest is Test {
         dao.setOperator(operator, true);
 
         voteDelegate = new MockVoteDelegationExtension();
-        executor = new VoteExecutor(address(dao), address(voteDelegate), 0);
+        executor = new CurveVoteExecutor(address(this), address(dao), address(voteDelegate), 0);
         executor.setGuardian(guardian, true);
     }
 
@@ -133,7 +134,7 @@ contract VoteExecutorTest is Test {
         _finishProposal(pid);
 
         vm.prank(alice);
-        vm.expectRevert(VoteExecutor.NotFinished.selector);
+        vm.expectRevert(CurveVoteExecutor.NotFinished.selector);
         executor.executeDaoVote(pid);
     }
 
@@ -145,7 +146,7 @@ contract VoteExecutorTest is Test {
         uint256 pid = _createProposal(DaoVotePlatform.VoteType.Parameter, 42);
         _voteYes(alice);
 
-        vm.expectRevert(VoteExecutor.NotFinished.selector);
+        vm.expectRevert(CurveVoteExecutor.NotFinished.selector);
         executor.executeDaoVote(pid);
     }
 
@@ -158,7 +159,7 @@ contract VoteExecutorTest is Test {
 
         executor.executeDaoVote(pid);
 
-        vm.expectRevert(VoteExecutor.AlreadyExecuted.selector);
+        vm.expectRevert(CurveVoteExecutor.AlreadyExecuted.selector);
         executor.executeDaoVote(pid);
     }
 
@@ -313,7 +314,7 @@ contract VoteExecutorTest is Test {
         _finalizeProposal(pid);
 
         vm.expectEmit(true, false, false, false);
-        emit VoteExecutor.DaoVoteExecuted(pid, dao.getYes(pid), dao.getNo(pid), true);
+        emit CurveVoteExecutor.DaoVoteExecuted(pid, dao.getYes(pid), dao.getNo(pid), true);
         executor.executeDaoVote(pid);
     }
 
@@ -366,7 +367,7 @@ contract VoteExecutorTest is Test {
         _voteYes(alice);
         _finalizeProposal(pid);
 
-        vm.expectRevert(VoteExecutor.QuorumNotMet.selector);
+        vm.expectRevert(CurveVoteExecutor.QuorumNotMet.selector);
         executor.executeDaoVote(pid);
     }
 

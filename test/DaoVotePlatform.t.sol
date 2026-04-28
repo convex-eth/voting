@@ -34,6 +34,7 @@ contract DaoVotePlatformTest is Test {
         surrogateRegistry = new SurrogateRegistry();
 
         dao = new DaoVotePlatform(
+            address(this),
             address(mockVlCVX),
             address(surrogateRegistry),
             address(delegation)

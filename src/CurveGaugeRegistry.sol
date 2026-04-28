@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "./interface/ICurveGauge.sol";
 import "./interface/IGaugeController.sol";
 
-contract GaugeRegistry {
+contract CurveGaugeRegistry {
 
     address public constant gaugeController = address(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
     event SetGauge(address _gauge, bool _active);

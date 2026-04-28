@@ -3,21 +3,21 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/GaugeVotePlatform.sol";
-import "../src/GaugeRegistry.sol";
+import "../src/CurveGaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
-import "../src/GaugeExecutor.sol";
+import "../src/CurveGaugeExecutor.sol";
 import "./mocks/MockVlCVX.sol";
 import "./mocks/MockGauges.sol";
 import "./mocks/MockVoteDelegateExtension.sol";
 
-contract GaugeExecutorTest is Test {
+contract CurveGaugeExecutorTest is Test {
     MockVlCVX internal mockVlCVX;
     Delegation internal delegation;
-    GaugeRegistry internal gaugeRegistry;
+    CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
     GaugeVotePlatform internal platform;
-    GaugeExecutor internal executor;
+    CurveGaugeExecutor internal executor;
     MockVoteDelegateExtension internal voteDelegate;
 
     MockCurveGauge internal gauge1;
@@ -41,10 +41,11 @@ contract GaugeExecutorTest is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, gaugeController.code);
 
-        gaugeRegistry = new GaugeRegistry();
+        gaugeRegistry = new CurveGaugeRegistry();
         surrogateRegistry = new SurrogateRegistry();
 
         platform = new GaugeVotePlatform(
+            address(this),
             address(mockVlCVX),
             address(gaugeRegistry),
             address(surrogateRegistry),
@@ -52,7 +53,7 @@ contract GaugeExecutorTest is Test {
         );
 
         voteDelegate = new MockVoteDelegateExtension();
-        executor = new GaugeExecutor(address(platform), address(voteDelegate));
+        executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();
@@ -156,7 +157,7 @@ contract GaugeExecutorTest is Test {
         vm.warp(endTime);
 
         address[] memory gauges = _getGauges(address(gauge1));
-        vm.expectRevert(GaugeExecutor.NotFinalized.selector);
+        vm.expectRevert(CurveGaugeExecutor.NotFinalized.selector);
         executor.executeGaugeVote(pid, gauges);
     }
 
@@ -181,7 +182,7 @@ contract GaugeExecutorTest is Test {
         _finalizeProposal(pid1);
 
         address[] memory gauges = _getGauges(address(gauge1));
-        vm.expectRevert(GaugeExecutor.NotLatestProposal.selector);
+        vm.expectRevert(CurveGaugeExecutor.NotLatestProposal.selector);
         executor.executeGaugeVote(pid0, gauges);
     }
 
@@ -195,7 +196,7 @@ contract GaugeExecutorTest is Test {
         _warpToNextEpoch();
 
         address[] memory gauges = _getGauges(address(gauge1));
-        vm.expectRevert(GaugeExecutor.EpochExpired.selector);
+        vm.expectRevert(CurveGaugeExecutor.EpochExpired.selector);
         executor.executeGaugeVote(pid, gauges);
     }
 
@@ -507,7 +508,7 @@ contract GaugeExecutorTest is Test {
 
         address[] memory gauges = _getGauges(address(gauge1));
         vm.expectEmit(true, false, false, false);
-        emit GaugeExecutor.GaugeVoteExecuted(pid, gauges, _getWeights(10000));
+        emit CurveGaugeExecutor.GaugeVoteExecuted(pid, gauges, _getWeights(10000));
         executor.executeGaugeVote(pid, gauges);
     }
 }

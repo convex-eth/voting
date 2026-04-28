@@ -5,7 +5,7 @@ import "./GaugeVotePlatform.sol";
 import "./interface/IvlCVX.sol";
 import "./interface/IVoteDelegateExtension.sol";
 
-contract GaugeExecutor {
+contract CurveGaugeExecutor {
 
     error NotFinalized();
     error NotLatestProposal();

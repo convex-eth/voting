@@ -6,7 +6,7 @@ import "./interface/IvlCVX.sol";
 import "./interface/IVoteDelegationExtension.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
-contract VoteExecutor is Ownable2Step {
+contract CurveVoteExecutor is Ownable2Step {
 
     error NotFinished();
     error AlreadyExecuted();
@@ -25,7 +25,7 @@ contract VoteExecutor is Ownable2Step {
     event GuardianSet(address indexed guardian, bool active);
     event QuorumSet(uint256 quorumBps);
 
-    constructor(address _votePlatform, address _voteDelegate, uint256 _quorumBps) Ownable(msg.sender) {
+    constructor(address _owner, address _votePlatform, address _voteDelegate, uint256 _quorumBps) Ownable(_owner) {
         votePlatform = DaoVotePlatform(_votePlatform);
         voteDelegate = IVoteDelegationExtension(_voteDelegate);
         quorumBps = _quorumBps;

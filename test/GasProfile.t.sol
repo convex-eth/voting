@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
 import "../src/GaugeVotePlatform.sol";
-import "../src/GaugeRegistry.sol";
+import "../src/CurveGaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "./mocks/MockVlCVX.sol";
@@ -12,7 +12,7 @@ import "./mocks/MockGauges.sol";
 contract GasProfile is Test {
     MockVlCVX internal mockVlCVX;
     Delegation internal delegation;
-    GaugeRegistry internal gaugeRegistry;
+    CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
     GaugeVotePlatform internal platform;
 
@@ -39,10 +39,11 @@ contract GasProfile is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
 
-        gaugeRegistry = new GaugeRegistry();
+        gaugeRegistry = new CurveGaugeRegistry();
         surrogateRegistry = new SurrogateRegistry();
 
         platform = new GaugeVotePlatform(
+            address(this),
             address(mockVlCVX),
             address(gaugeRegistry),
             address(surrogateRegistry),

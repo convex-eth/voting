@@ -2,11 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../src/GaugeRegistry.sol";
+import "../src/CurveGaugeRegistry.sol";
 import "./mocks/MockGauges.sol";
 
-contract GaugeRegistryTest is Test {
-    GaugeRegistry internal registry;
+contract CurveGaugeRegistryTest is Test {
+    CurveGaugeRegistry internal registry;
     MockGaugeController internal controller;
     MockCurveGauge internal gauge1;
     MockCurveGauge internal gauge2;
@@ -26,7 +26,7 @@ contract GaugeRegistryTest is Test {
         gauge4 = new MockCurveGauge();
         gauge5 = new MockCurveGauge();
 
-        registry = new GaugeRegistry();
+        registry = new CurveGaugeRegistry();
 
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge2), 2000);
@@ -159,7 +159,7 @@ contract GaugeRegistryTest is Test {
 
     function test_setGaugeEmitsAddEvent() public {
         vm.expectEmit(true, true, false, false);
-        emit GaugeRegistry.SetGauge(address(gauge1), true);
+        emit CurveGaugeRegistry.SetGauge(address(gauge1), true);
         registry.setGauge(address(gauge1));
     }
 
@@ -169,7 +169,7 @@ contract GaugeRegistryTest is Test {
         gauge1.setKilled(true);
 
         vm.expectEmit(true, true, false, false);
-        emit GaugeRegistry.SetGauge(address(gauge1), false);
+        emit CurveGaugeRegistry.SetGauge(address(gauge1), false);
         registry.setGauge(address(gauge1));
     }
 

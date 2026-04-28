@@ -78,10 +78,10 @@ contract DaoVotePlatform is Ownable2Step {
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
     event OperatorSet(address indexed op, bool active);
 
-    constructor(address _vlCVX, address _surrogateRegistry, address _delegation)
-        Ownable(msg.sender)
+    constructor(address _owner, address _vlCVX, address _surrogateRegistry, address _delegation)
+        Ownable(_owner)
     {
-        operators[msg.sender] = true;
+        operators[_owner] = true;
         vlCVX = IvlCVX(_vlCVX);
         surrogateRegistry = SurrogateRegistry(_surrogateRegistry);
         delegation = Delegation(_delegation);

@@ -12,7 +12,7 @@ DaoVotePlatform is a yes/no DAO voting contract for vlCVX holders and their dele
 | **Delegation** | Delegate addresses, aggregated weight data, and `sync()` |
 | **SurrogateRegistry** | Allows registered surrogates to vote on behalf of another address |
 
-No GaugeRegistry — there are no gauges to validate.
+No CurveGaugeRegistry — there are no gauges to validate.
 
 ## Proposals
 
@@ -127,7 +127,7 @@ VoteTotals { uint128 yes; uint128 no; }
 | Per-user vote storage | `GaugeVote[]` array | `uint16 yesWeight` + `uint16 noWeight` (packed into UserInfo) |
 | Global totals | Per-gauge totals + `voteTotals` mapping | Packed `{uint128 yes, uint128 no}` — 1 slot |
 | `voteTotals` | Separate storage write | Computed view: `yes + no` |
-| GaugeRegistry | Required | Not needed |
+| CurveGaugeRegistry | Required | Not needed |
 | Overtime | 10-min extension for equalizer accounts | Replaced by 12-hour finalization window |
 | Equalizer accounts | Yes | No |
 | Max weight check | `sum(weights) <= 10000` | `yesWeight + noWeight <= 10000` |
