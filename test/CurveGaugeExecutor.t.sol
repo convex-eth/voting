@@ -53,7 +53,7 @@ contract CurveGaugeExecutorTest is Test {
         );
 
         voteDelegate = new MockVoteDelegateExtension();
-        executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
+        executor = new CurveGaugeExecutor( address(platform), address(voteDelegate));
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();
