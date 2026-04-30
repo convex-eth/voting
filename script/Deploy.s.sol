@@ -12,7 +12,7 @@ import "../src/CurveGaugeRegistry.sol";
 import "../src/CurveGaugeExecutor.sol";
 import "../src/CurveVoteExecutor.sol";
 import "../src/CurveDaoProposer.sol";
-import "../src/CurveGaugeProposer.sol";
+import "../src/GaugeProposer.sol";
 
 // ============================================================================
 // Deploy Script for Convex Voting Project
@@ -146,12 +146,12 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", 5, address(curveDaoProposer)));
         console.log("Registered CURVE -> DAO_PROPOSER (5)");
 
-        CurveGaugeProposer curveGaugeProposer = new CurveGaugeProposer(
+        GaugeProposer curveGaugeProposer = new GaugeProposer(
             address(core),
             VLCVX,
             address(curveGaugeVoting)
         );
-        console.log("CurveGaugeProposer:", address(curveGaugeProposer));
+        console.log("GaugeProposer:", address(curveGaugeProposer));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", 6, address(curveGaugeProposer)));
         console.log("Registered CURVE -> GAUGE_PROPOSER (6)");
@@ -161,7 +161,7 @@ contract Deploy is Script {
         console.log("Set CurveDaoProposer as operator on CurveDaoVoting");
 
         core.execute(address(curveGaugeVoting), abi.encodeWithSignature("setOperator(address,bool)", address(curveGaugeProposer), true));
-        console.log("Set CurveGaugeProposer as operator on CurveGaugeVoting");
+        console.log("Set GaugeProposer as operator on CurveGaugeVoting");
 
         vm.stopBroadcast();
 
@@ -171,6 +171,6 @@ contract Deploy is Script {
         console.log("CurveDaoVoting:", address(curveDaoVoting));
         console.log("CurveGaugeVoting:", address(curveGaugeVoting));
         console.log("CurveDaoProposer:", address(curveDaoProposer));
-        console.log("CurveGaugeProposer:", address(curveGaugeProposer));
+        console.log("GaugeProposer:", address(curveGaugeProposer));
     }
 }

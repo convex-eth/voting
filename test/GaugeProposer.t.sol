@@ -2,20 +2,20 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../src/CurveGaugeProposer.sol";
+import "../src/GaugeProposer.sol";
 import "../src/GaugeVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/CurveGaugeRegistry.sol";
 import "./mocks/MockVlCVX.sol";
 
-contract CurveGaugeProposerTest is Test {
+contract GaugeProposerTest is Test {
     MockVlCVX internal mockVlCVX;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     CurveGaugeRegistry internal gaugeRegistry;
     GaugeVotePlatform internal gaugeVotePlatform;
-    CurveGaugeProposer internal proposer;
+    GaugeProposer internal proposer;
 
     address internal owner = address(this);
     address internal operator = makeAddr("operator");
@@ -41,7 +41,7 @@ contract CurveGaugeProposerTest is Test {
 
         gaugeVotePlatform.setOperator(operator, true);
 
-        proposer = new CurveGaugeProposer(owner, address(mockVlCVX), address(gaugeVotePlatform));
+        proposer = new GaugeProposer(owner, address(mockVlCVX), address(gaugeVotePlatform));
         gaugeVotePlatform.setOperator(address(proposer), true);
     }
 

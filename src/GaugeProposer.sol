@@ -5,7 +5,7 @@ import "./interface/IGaugeVotePlatform.sol";
 import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
-contract CurveGaugeProposer is Ownable2Step {
+contract GaugeProposer is Ownable2Step {
     uint256 public proposalLength = 5 days;
 
     IvlCVX public immutable vlCVX;
