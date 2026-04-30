@@ -235,6 +235,32 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.GAUGE_EXECUTOR, address(fxGaugeExecutor)));
         console.log("Registered FX -> GAUGE_EXECUTOR");
 
+        // ── 19. Deploy Frax DaoVoting ──
+        DaoVotePlatform fraxDaoVoting = new DaoVotePlatform(
+            address(core),
+            VLCVX,
+            address(surrogateRegistry),
+            address(daoDelegation)
+        );
+        console.log("FraxDaoVoting:", address(fraxDaoVoting));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.VOTE_DAO, address(fraxDaoVoting)));
+        console.log("Registered FRAX -> VOTE_DAO");
+
+        // ── 20. Deploy Frax GenericDaoProposer ──
+        GenericDaoProposer fraxDaoProposer = new GenericDaoProposer(
+            address(core),
+            address(fraxDaoVoting)
+        );
+        console.log("FraxDaoProposer:", address(fraxDaoProposer));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.DAO_PROPOSER, address(fraxDaoProposer)));
+        console.log("Registered FRAX -> DAO_PROPOSER");
+
+        // ── 21. Set Proposer as Operator on Frax Platform ──
+        core.execute(address(fraxDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(fraxDaoProposer), true));
+        console.log("Set FraxDaoProposer as operator on FraxDaoVoting");
+
         vm.stopBroadcast();
 
         console.log("\n=== Deployment Summary ===");
@@ -249,5 +275,7 @@ contract Deploy is Script {
         console.log("FxDaoProposer:", address(fxDaoProposer));
         console.log("FxGaugeProposer:", address(fxGaugeProposer));
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
+        console.log("FraxDaoVoting:", address(fraxDaoVoting));
+        console.log("FraxDaoProposer:", address(fraxDaoProposer));
     }
 }
