@@ -310,7 +310,43 @@ contract Deploy is Script {
         core.execute(address(fraxDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(fraxDaoProposer), true));
         console.log("Set FraxDaoProposer as operator on FraxDaoVoting");
 
-        // ── 22. Deploy ResupplyVoteExecutor ──
+        // ── 22. Deploy Convex DaoVoting ──
+        DaoVotePlatform convexDaoVoting = new DaoVotePlatform(
+            address(core),
+            VLCVX,
+            address(surrogateRegistry),
+            address(daoDelegation)
+        );
+        console.log("ConvexDaoVoting:", address(convexDaoVoting));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", registry.VOTE_DAO, address(convexDaoVoting)));
+        console.log("Registered CONVEX -> VOTE_DAO");
+
+        _setOperator(address(convexDaoVoting), MSIG);
+        console.log("Set MSIG as operator on ConvexDaoVoting");
+
+        // ── 23. Deploy Convex GenericDaoProposer ──
+        GenericDaoProposer convexDaoProposer = new GenericDaoProposer(
+            address(core),
+            address(convexDaoVoting)
+        );
+        console.log("ConvexDaoProposer:", address(convexDaoProposer));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", registry.DAO_PROPOSER, address(convexDaoProposer)));
+        console.log("Registered CONVEX -> DAO_PROPOSER");
+
+        // Set bot and deployer as operators on Convex GenericDaoProposer
+        core.execute(address(convexDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_BOT, true));
+        console.log("Set ConvexBot as operator on ConvexDaoProposer");
+
+        core.execute(address(convexDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
+        console.log("Set ConvexDeployer as operator on ConvexDaoProposer");
+
+        // ── 24. Set Proposer as Operator on Convex Platform ──
+        core.execute(address(convexDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(convexDaoProposer), true));
+        console.log("Set ConvexDaoProposer as operator on ConvexDaoVoting");
+
+        // ── 25. Deploy ResupplyVoteExecutor ──
         ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor(
             address(core),
             address(fraxDaoVoting),
@@ -324,7 +360,7 @@ contract Deploy is Script {
         _setGuardian(address(resupplyVoteExecutor), MSIG);
         console.log("Set MSIG as guardian on ResupplyVoteExecutor");
 
-        // ── 23. Deploy Resupply DaoVoting ──
+        // ── 26. Deploy Resupply DaoVoting ──
         DaoVotePlatform resupplyDaoVoting = new DaoVotePlatform(
             address(core),
             VLCVX,
@@ -339,7 +375,7 @@ contract Deploy is Script {
         _setOperator(address(resupplyDaoVoting), MSIG);
         console.log("Set MSIG as operator on ResupplyDaoVoting");
 
-        // ── 24. Deploy ResupplyDaoProposer ──
+        // ── 27. Deploy ResupplyDaoProposer ──
         ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer(
             address(core),
             address(resupplyDaoVoting)
@@ -372,6 +408,8 @@ contract Deploy is Script {
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
         console.log("FraxDaoVoting:", address(fraxDaoVoting));
         console.log("FraxDaoProposer:", address(fraxDaoProposer));
+        console.log("ConvexDaoVoting:", address(convexDaoVoting));
+        console.log("ConvexDaoProposer:", address(convexDaoProposer));
         console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
         console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
         console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));

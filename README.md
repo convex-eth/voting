@@ -35,15 +35,15 @@ function getAddress(string platform, uint8 type) external view returns (address)
 
 ### What Each Platform Registers
 
-| Type | CURVE | FX | FRAX | RESUPPLY |
-|---|---|---|---|---|
-| `VOTE_DAO` (0) | DaoVotePlatform | DaoVotePlatform | DaoVotePlatform | DaoVotePlatform |
-| `VOTE_GAUGE` (1) | GaugeVotePlatform | GaugeVotePlatform | — | — |
-| `GAUGE_REGISTRY` (2) | CurveGaugeRegistry | FxGaugeRegistry | — | — |
-| `DAO_EXECUTOR` (3) | CurveVoteExecutor | — | — | ResupplyVoteExecutor |
-| `GAUGE_EXECUTOR` (4) | CurveGaugeExecutor | FxGaugeExecutor | — | — |
-| `DAO_PROPOSER` (5) | CurveDaoProposer | GenericDaoProposer | GenericDaoProposer | ResupplyDaoProposer |
-| `GAUGE_PROPOSER` (6) | GaugeProposer | GaugeProposer | — | — |
+| Type | CURVE | FX | FRAX | RESUPPLY | CONVEX |
+|---|---|---|---|---|---|
+| `VOTE_DAO` (0) | DaoVotePlatform | DaoVotePlatform | DaoVotePlatform | DaoVotePlatform | DaoVotePlatform |
+| `VOTE_GAUGE` (1) | GaugeVotePlatform | GaugeVotePlatform | — | — | — |
+| `GAUGE_REGISTRY` (2) | CurveGaugeRegistry | FxGaugeRegistry | — | — | — |
+| `DAO_EXECUTOR` (3) | CurveVoteExecutor | — | — | ResupplyVoteExecutor | — |
+| `GAUGE_EXECUTOR` (4) | CurveGaugeExecutor | FxGaugeExecutor | — | — | — |
+| `DAO_PROPOSER` (5) | CurveDaoProposer | GenericDaoProposer | GenericDaoProposer | ResupplyDaoProposer | GenericDaoProposer |
+| `GAUGE_PROPOSER` (6) | GaugeProposer | GaugeProposer | — | — | — |
 
 ### Shared Contracts
 
@@ -118,6 +118,7 @@ address daoDelegation = registry.getAddress("DELEGATION", registry.VOTE_DAO());
 | **F(x)** | DaoVotePlatform | GaugeVotePlatform | Full DAO + gauge support |
 | **Frax** | DaoVotePlatform | — | DAO only |
 | **Resupply** | DaoVotePlatform | — | DAO only (Frax ecosystem) |
+| **Convex** | DaoVotePlatform | — | DAO only (internal Convex governance) |
 
 ## Delegation
 
