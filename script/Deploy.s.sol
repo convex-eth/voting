@@ -39,6 +39,8 @@ import "../src/GenericDaoProposer.sol";
 contract Deploy is Script {
     address constant VLCVX = 0x72a19342e8F1838460eBFCCEf09F6585e32db86E;
     address constant MSIG = 0xa3C5A1e09150B75ff251c1a7815A07182c3de2FB;
+    address constant CONVEX_BOT = 0x724061efDFef4a421e8be05133ad24922D07b5Bf;
+    address constant CONVEX_DEPLOYER = 0x947B7742C403f20e5FaCcDAc5E092C943E7D0277;
 
     function run() external {
         address deployer = msg.sender;
@@ -208,6 +210,13 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.DAO_PROPOSER, address(fxDaoProposer)));
         console.log("Registered FX -> DAO_PROPOSER");
 
+        // Set bot and deployer as operators on Fx GenericDaoProposer
+        core.execute(address(fxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_BOT, true));
+        console.log("Set ConvexBot as operator on FxDaoProposer");
+
+        core.execute(address(fxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
+        console.log("Set ConvexDeployer as operator on FxDaoProposer");
+
         // ── 16. Deploy F(x) GaugeProposer ──
         GaugeProposer fxGaugeProposer = new GaugeProposer(
             address(core),
@@ -256,6 +265,13 @@ contract Deploy is Script {
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.DAO_PROPOSER, address(fraxDaoProposer)));
         console.log("Registered FRAX -> DAO_PROPOSER");
+
+        // Set bot and deployer as operators on Frax GenericDaoProposer
+        core.execute(address(fraxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_BOT, true));
+        console.log("Set ConvexBot as operator on FraxDaoProposer");
+
+        core.execute(address(fraxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
+        console.log("Set ConvexDeployer as operator on FraxDaoProposer");
 
         // ── 21. Set Proposer as Operator on Frax Platform ──
         core.execute(address(fraxDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(fraxDaoProposer), true));
