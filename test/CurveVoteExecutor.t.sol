@@ -60,11 +60,11 @@ contract CurveVoteExecutorTest is Test {
         vm.warp(currentEpoch + WEEK + 1);
     }
 
-    function _createProposal(DaoVotePlatform.VoteType vt, uint256 proposalId) internal returns (uint256) {
+    function _createProposal(DaoVotePlatform.VoteType vt, uint256 externalProposalId) internal returns (uint256) {
         uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
-        dao.createProposal(startTime, endTime, vt, proposalId);
+        dao.createProposal(startTime, endTime, vt, externalProposalId);
         uint256 pid = dao.proposalCount() - 1;
         vm.warp(startTime);
         return pid;
@@ -260,24 +260,30 @@ contract CurveVoteExecutorTest is Test {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();
 
-        uint256 pid0 = _createProposal(DaoVotePlatform.VoteType.Parameter, 10);
+        uint256 pid0 = _createProposal(DaoVotePlatform.VoteType.Ownership, 20);
         _voteYes(alice);
         _finalizeProposal(pid0);
 
         _warpToNextEpoch();
-        uint256 pid1 = _createProposal(DaoVotePlatform.VoteType.Ownership, 20);
+        (, uint256 previousEnd,,,) = dao.proposals(pid0);
+        uint256 startTime = previousEnd + dao.finalizationTime() + 1 weeks;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 10);
+        uint256 pid1 = dao.proposalCount() - 1;
+        vm.warp(startTime);
         _voteNo(alice);
         _finalizeProposal(pid1);
 
         executor.executeDaoVote(pid0);
-        assertEq(voteDelegate.lastVoteId(), 10);
-        assertFalse(voteDelegate.lastIsOwnership());
+        assertEq(voteDelegate.lastVoteId(), 20);
+        assertTrue(voteDelegate.lastIsOwnership());
         assertTrue(executor.isDone(pid0));
         assertFalse(executor.isDone(pid1));
 
         executor.executeDaoVote(pid1);
-        assertEq(voteDelegate.lastVoteId(), 20);
-        assertTrue(voteDelegate.lastIsOwnership());
+        assertEq(voteDelegate.lastVoteId(), 10);
+        assertFalse(voteDelegate.lastIsOwnership());
         assertTrue(executor.isDone(pid1));
     }
 
@@ -371,6 +377,18 @@ contract CurveVoteExecutorTest is Test {
         executor.executeDaoVote(pid);
     }
 
+    function test_quorumNotMetWhenTotalSupplyZero() public {
+        _warpToNextEpoch();
+
+        executor.setQuorum(1000);
+
+        uint256 pid = _createProposal(DaoVotePlatform.VoteType.Parameter, 1);
+        _finalizeProposal(pid);
+
+        vm.expectRevert(CurveVoteExecutor.QuorumNotMet.selector);
+        executor.executeDaoVote(pid);
+    }
+
     function test_quorumZeroAlwaysPasses() public {
         _lockAndDelegate(alice, 100, address(0));
         _warpToNextEpoch();
@@ -389,5 +407,15 @@ contract CurveVoteExecutorTest is Test {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
         executor.setQuorum(1000);
+    }
+
+    function test_cannotSetQuorumAboveBps() public {
+        vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
+        executor.setQuorum(10001);
+    }
+
+    function test_cannotConstructWithQuorumAboveBps() public {
+        vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
+        new CurveVoteExecutor(address(this), address(dao), address(voteDelegate), 10001);
     }
 }
