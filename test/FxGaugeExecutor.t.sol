@@ -187,6 +187,27 @@ contract FxGaugeExecutorTest is Test {
         assertEq(w[1], 4000);
     }
 
+    function test_multipleVotersWeightPaddedTo10000() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _lockAndDelegate(bob, 500, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _vote(bob, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(5000, 5000));
+        _finalizeProposal(pid);
+
+        uint256 totalVotes = platform.voteTotals(pid);
+        uint256 gauge1Total = platform.gaugeTotal(pid, address(gauge1));
+        uint256 expectedG1Weight = gauge1Total * 10000 / totalVotes;
+
+        executor.executeGaugeVote(pid, _getGauges2(address(gauge1), address(gauge2)));
+
+        (, uint256[] memory w) = _mockVoter().getLastCall();
+        assertEq(w[0], expectedG1Weight);
+        assertEq(w[0] + w[1], 10000);
+    }
+
     function test_revertIfNotFinalized() public {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();
@@ -199,6 +220,43 @@ contract FxGaugeExecutorTest is Test {
         address[] memory gauges = _getGauges(address(gauge1));
         vm.expectRevert(FxGaugeExecutor.NotFinalized.selector);
         executor.executeGaugeVote(pid, gauges);
+    }
+
+    function test_revertIfNotLatestProposal() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid0 = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid0);
+
+        vm.warp(block.timestamp + 1 days);
+        _lockAndDelegate(bob, 500, address(0));
+        _warpToNextEpoch();
+
+        uint256 startTime = block.timestamp + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        platform.createProposal(startTime, endTime);
+        uint256 pid1 = platform.proposalCount() - 1;
+        vm.warp(startTime);
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid1);
+
+        vm.expectRevert(FxGaugeExecutor.NotLatestProposal.selector);
+        executor.executeGaugeVote(pid0, _getGauges(address(gauge1)));
+    }
+
+    function test_revertIfEpochExpired() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _finalizeProposal(pid);
+
+        _warpToNextEpoch();
+
+        vm.expectRevert(FxGaugeExecutor.EpochExpired.selector);
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
     }
 
     function test_anyoneCanExecute() public {
@@ -226,6 +284,49 @@ contract FxGaugeExecutorTest is Test {
         executor.executeGaugeVote(pid, gauges);
 
         assertTrue(executor.isDone(pid));
+    }
+
+    function test_revertDuplicatePositiveGaugeInSameBatch() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        address[] memory gauges = _getGauges2(address(gauge1), address(gauge1));
+        vm.expectRevert(FxGaugeExecutor.GaugeAlreadySubmitted.selector);
+        executor.executeGaugeVote(pid, gauges);
+    }
+
+    function test_revertPositiveGaugeRepeatedAcrossBatches() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        vm.expectRevert(FxGaugeExecutor.GaugeAlreadySubmitted.selector);
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        assertFalse(executor.isDone(pid));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertEq(executor.submittedWeight(pid), 6000);
+    }
+
+    function test_zeroWeightGaugeDoesNotAdvanceCompletion() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge3)));
+
+        assertFalse(executor.isDone(pid));
+        assertEq(executor.submittedGaugeCount(pid), 0);
+        assertEq(executor.submittedWeight(pid), 0);
     }
 
     function test_gaugeVoteExecutedEvent() public {

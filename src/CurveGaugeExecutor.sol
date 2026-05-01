@@ -10,6 +10,7 @@ contract CurveGaugeExecutor {
     error NotFinalized();
     error NotLatestProposal();
     error EpochExpired();
+    error GaugeAlreadySubmitted();
 
     uint256 public constant WEIGHT_BPS = 10000;
     uint256 public constant EPOCH_DURATION = 86400 * 7;
@@ -23,6 +24,7 @@ contract CurveGaugeExecutor {
     }
 
     mapping(uint256 => ExecutionState) internal _executionState;
+    mapping(uint256 => mapping(address => bool)) public submittedGauge;
 
     function submittedGaugeCount(uint256 proposalId) external view returns (uint256) {
         return _executionState[proposalId].gaugeCount;
@@ -57,7 +59,11 @@ contract CurveGaugeExecutor {
         uint256 lastNonZero;
 
         for (uint256 i = 0; i < len; ) {
-            weights[i] = votePlatform.gaugeTotal(proposalId, gauges[i]) * WEIGHT_BPS / totalVotes;
+            address gauge = gauges[i];
+            if (submittedGauge[proposalId][gauge]) revert GaugeAlreadySubmitted();
+            submittedGauge[proposalId][gauge] = true;
+
+            weights[i] = votePlatform.gaugeTotal(proposalId, gauge) * WEIGHT_BPS / totalVotes;
             if (weights[i] > 0) {
                 count++;
                 weightSum += weights[i];

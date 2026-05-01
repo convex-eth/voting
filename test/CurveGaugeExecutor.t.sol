@@ -413,6 +413,47 @@ contract CurveGaugeExecutorTest is Test {
         assertEq(executor.submittedWeight(pid), 6000);
     }
 
+    function test_revertDuplicatePositiveGaugeInSameBatch() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        address[] memory gauges = _getGauges2(address(gauge1), address(gauge1));
+        vm.expectRevert(CurveGaugeExecutor.GaugeAlreadySubmitted.selector);
+        executor.executeGaugeVote(pid, gauges);
+    }
+
+    function test_revertPositiveGaugeRepeatedAcrossBatches() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        vm.expectRevert(CurveGaugeExecutor.GaugeAlreadySubmitted.selector);
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        assertFalse(executor.isDone(pid));
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertEq(executor.submittedWeight(pid), 6000);
+    }
+
+    function test_revertDuplicateZeroWeightGaugeInSameBatch() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        address[] memory gauges = _getGauges2(address(gauge3), address(gauge3));
+        vm.expectRevert(CurveGaugeExecutor.GaugeAlreadySubmitted.selector);
+        executor.executeGaugeVote(pid, gauges);
+    }
+
     // ========== Multi-batch with padding ==========
 
     function test_multiBatchPadsOnLastBatch() public {
