@@ -37,17 +37,16 @@ vlCVX balances change when users lock, relock, or let locks expire. The Delegati
 
 ### sync(_user)
 
-Propagates the user's current vlCVX balance into the weight tables. Unlike `setDelegate`, `sync()` also writes weight for the **current epoch** (not just future epochs).
+Propagates the user's current vlCVX balance into the weight tables. Unlike `setDelegate`, `sync()` may also write weight for the **current epoch**, but only for the delegate that is already active in that epoch. A delegate newly set for the next epoch is not backfilled into the current epoch.
 
 Behavior:
 1. Calls `vlCVX.checkpointEpoch()`
-2. If this user has already been synced this epoch (tracked via `syncSnapshots[user].epoch == currentEpoch`), returns early — no double-sync within the same epoch
-3. Reads the user's current delegation state (delegate, pre-sync weight)
+2. If this user has already been synced this epoch (tracked via `syncSnapshots[user][currentEpoch].timestamp != 0`), returns early — no double-sync within the same epoch
+3. Reads the user's delegate active in the current epoch and the delegate active for future epochs
 4. Stores a `SyncSnapshot` for the user containing:
-   - `epoch` — the epoch this snapshot was taken
    - `preSyncWeight` — the user's delegation weight BEFORE this sync (as uint32, truncated)
    - `timestamp` — `block.timestamp` when sync was called
-5. Then calls `_syncUser` with `includeCurrentEpoch = true`, which starts from `epochCount() - 2` (current epoch) and writes through `FILL_EPOCHS + 1` future epochs
+5. Then writes the current epoch to the current-epoch delegate and future epochs to the future delegate. If both are the same, a single range update starts from `epochCount() - 2` and writes through `FILL_EPOCHS + 1` epochs.
 
 The snapshot allows voting contracts to determine whether a delegate voted before or after a sync, which affects which weight value to use when removing a delegatee's weight from a delegate's adjusted weight.
 
@@ -67,11 +66,11 @@ The `getSyncSnapshot(user, epoch)` view function returns `(preSyncWeight, timest
 ### setDelegate vs sync
 
 - `setDelegate`: Only writes weights for **future** epochs (starts at `epochCount() - 1`). Does NOT write current epoch.
-- `sync`: Writes weights for **current + future** epochs (starts at `epochCount() - 2`). Also stores the sync snapshot.
+- `sync`: Writes current-epoch weight only for the delegate active in the current epoch, and future-epoch weight for the delegate active from the next epoch. Also stores the sync snapshot.
 
 This means:
 - `setDelegate` is for changing who you delegate to — takes effect next epoch
-- `sync` is for updating your weight after a vlCVX balance change — takes effect immediately (current epoch)
+- `sync` is for updating your weight after a vlCVX balance change — takes effect immediately only for an already-active current-epoch delegate
 
 ### When to Sync
 

@@ -91,8 +91,9 @@ contract Delegation {
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
         if (len == 0) return;
-        address delegate = history[len - 1].delegate;
-        if (delegate == address(0)) return;
+        address currentDelegate = _getDelegateAtEpoch(history, currentEpoch);
+        address futureDelegate = history[len - 1].delegate;
+        if (currentDelegate == address(0) && futureDelegate == address(0)) return;
 
         uint256 offset = currentEpoch & 7;
         EpochWeightingEntry memory entry = userEpochWeights[_user][currentEpoch >> 3];
@@ -105,11 +106,23 @@ contract Delegation {
             timestamp: uint96(block.timestamp)
         });
 
-        _syncUser(_user, delegate, true);
+        if (currentDelegate == futureDelegate) {
+            _syncUser(_user, currentDelegate, true);
+        } else {
+            if (currentDelegate != address(0)) {
+                _syncUserRange(_user, currentDelegate, currentEpoch, currentEpoch + 1);
+            }
+            if (futureDelegate != address(0)) {
+                _syncUser(_user, futureDelegate, false);
+            }
+        }
     }
 
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
-        SetDelegateRecord[] storage history = delegateHistory[_user];
+        return _getDelegateAtEpoch(delegateHistory[_user], _epoch);
+    }
+
+    function _getDelegateAtEpoch(SetDelegateRecord[] storage history, uint256 _epoch) internal view returns (address) {
         uint256 len = history.length;
         for (uint256 i = len; i > 0;) {
             unchecked { --i; }
@@ -133,7 +146,12 @@ contract Delegation {
         uint256 endEpoch;
         unchecked { endEpoch = nextEpoch + fillEpochs; }
 
-        uint256 startEntry = nextEpoch >> 3;
+        _syncUserRange(_user, _delegate, nextEpoch, endEpoch);
+    }
+
+    function _syncUserRange(address _user, address _delegate, uint256 _startEpoch, uint256 _endEpoch) internal {
+        uint256 startEntry = _startEpoch >> 3;
+        uint256 endEpoch = _endEpoch;
         uint256 endEntry = (endEpoch - 1) >> 3;
 
         for (uint256 entryIdx = startEntry; entryIdx <= endEntry;) {
@@ -147,7 +165,7 @@ contract Delegation {
                 entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
             }
 
-            uint256 loopStart = nextEpoch > entryStartEpoch ? nextEpoch : entryStartEpoch;
+            uint256 loopStart = _startEpoch > entryStartEpoch ? _startEpoch : entryStartEpoch;
             uint256 loopEnd = endEpoch < entryEndEpoch ? endEpoch : entryEndEpoch;
 
             for (uint256 epoch = loopStart; epoch < loopEnd;) {
