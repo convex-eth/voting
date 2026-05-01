@@ -5,8 +5,8 @@ import "./interface/ICurveGauge.sol";
 import "./interface/IGaugeController.sol";
 
 contract CurveGaugeRegistry {
-
     address public constant gaugeController = address(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
+
     event SetGauge(address _gauge, bool _active);
 
     mapping(address => uint256) public activeGaugeIndex;
@@ -17,8 +17,14 @@ contract CurveGaugeRegistry {
     }
 
     function isValidGauge(address _gauge) public view returns (bool) {
-        return IGaugeController(gaugeController).get_gauge_weight(_gauge) > 0
-            && !ICurveGauge(_gauge).is_killed();
+        if (IGaugeController(gaugeController).get_gauge_weight(_gauge) == 0) return false;
+
+        // Some legacy Curve gauges with active controller weight do not expose `is_killed()`.
+        // Treat a missing kill switch as not killed; newer gauges that expose it must return false.
+        (bool success, bytes memory data) = _gauge.staticcall(abi.encodeWithSelector(ICurveGauge.is_killed.selector));
+        if (!success || data.length < 32) return true;
+
+        return !abi.decode(data, (bool));
     }
 
     function isRegisteredGauge(address _gauge) external view returns (bool) {

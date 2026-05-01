@@ -13,6 +13,7 @@ contract CurveGaugeRegistryTest is Test {
     MockCurveGauge internal gauge3;
     MockCurveGauge internal gauge4;
     MockCurveGauge internal gauge5;
+    MockLegacyCurveGauge internal legacyGauge;
 
     address constant GAUGE_CONTROLLER = address(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
 
@@ -25,6 +26,7 @@ contract CurveGaugeRegistryTest is Test {
         gauge3 = new MockCurveGauge();
         gauge4 = new MockCurveGauge();
         gauge5 = new MockCurveGauge();
+        legacyGauge = new MockLegacyCurveGauge();
 
         registry = new CurveGaugeRegistry();
 
@@ -33,6 +35,7 @@ contract CurveGaugeRegistryTest is Test {
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge3), 3000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge4), 0);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge5), 500);
+        MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(legacyGauge), 1000);
     }
 
     function test_addValidGauge() public {
@@ -155,6 +158,16 @@ contract CurveGaugeRegistryTest is Test {
     function test_isValidGaugeKilled() public {
         gauge1.setKilled(true);
         assertFalse(registry.isValidGauge(address(gauge1)));
+    }
+
+    function test_legacyCurveGaugeWithoutKillSwitchIsValidWhenWeighted() public {
+        assertTrue(registry.isValidGauge(address(legacyGauge)));
+
+        registry.setGauge(address(legacyGauge));
+
+        assertTrue(registry.isRegisteredGauge(address(legacyGauge)));
+        assertEq(registry.gaugeLength(), 1);
+        assertEq(registry.activeGauges(0), address(legacyGauge));
     }
 
     function test_setGaugeEmitsAddEvent() public {
