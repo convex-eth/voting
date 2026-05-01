@@ -8,7 +8,6 @@ import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract GaugeVotePlatform is Ownable2Step {
-
     error NotStarted();
     error Ended();
     error Mismatch();
@@ -21,6 +20,7 @@ contract GaugeVotePlatform is Ownable2Step {
     error NotVoteAuth();
     error NotSigner();
     error NotOperator();
+    error InvalidWeightTotal();
 
     mapping(address => bool) public operators;
 
@@ -45,6 +45,7 @@ contract GaugeVotePlatform is Ownable2Step {
         address delegate;
         uint96 totalDelegationWeight;
     }
+
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     mapping(uint256 => address[]) public votedUsers;
 
@@ -104,13 +105,27 @@ contract GaugeVotePlatform is Ownable2Step {
         return _gaugeEntries[_proposalId].length;
     }
 
-    function getGaugeEntry(uint256 _proposalId, uint256 _index) external view returns (address gauge, uint256 totalWeight) {
+    function getGaugeEntry(uint256 _proposalId, uint256 _index)
+        external
+        view
+        returns (address gauge, uint256 totalWeight)
+    {
         GaugeTotalEntry storage entry = _gaugeEntries[_proposalId][_index];
         gauge = entry.gauge;
         totalWeight = entry.totalWeight;
     }
 
-    function getVote(uint256 _proposalId, address _user) public view returns (address[] memory gauges, uint256[] memory weights, bool voted, uint256 baseWeight, int256 adjustedWeight) {
+    function getVote(uint256 _proposalId, address _user)
+        public
+        view
+        returns (
+            address[] memory gauges,
+            uint256[] memory weights,
+            bool voted,
+            uint256 baseWeight,
+            int256 adjustedWeight
+        )
+    {
         GaugeVote[] storage userVotes = votes[_proposalId][_user];
         uint256 len = userVotes.length;
         gauges = new address[](len);
@@ -118,7 +133,9 @@ contract GaugeVotePlatform is Ownable2Step {
         for (uint256 i = 0; i < len;) {
             gauges[i] = userVotes[i].gauge;
             weights[i] = userVotes[i].weight;
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
         UserInfo storage u = userInfo[_proposalId][_user];
         voted = u.voteStatus > 0;
@@ -159,12 +176,12 @@ contract GaugeVotePlatform is Ownable2Step {
         emit UserWeightChange(_proposalId, _account, baseWeight, user.adjustedWeight);
 
         if (delegate != _account) {
+            uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
             UserInfo storage del = userInfo[_proposalId][delegate];
 
             if (del.voteStatus == 0) {
-                del.adjustedWeight -= int96(int256(baseWeight));
+                del.adjustedWeight -= int96(int256(currentDelWeight));
             } else {
-                uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
                 (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, epoch);
                 int256 weightToRemove;
 
@@ -185,8 +202,14 @@ contract GaugeVotePlatform is Ownable2Step {
                 uint256 len = delegateVotes.length;
 
                 for (uint256 i = 0; i < len;) {
-                    _changeGaugeTotal(_proposalId, delegateVotes[i].gauge, -(int256(uint256(delegateVotes[i].weight)) * weightToRemove / int256(max_weight)));
-                    unchecked { ++i; }
+                    _changeGaugeTotal(
+                        _proposalId,
+                        delegateVotes[i].gauge,
+                        -(int256(uint256(delegateVotes[i].weight)) * weightToRemove / int256(max_weight))
+                    );
+                    unchecked {
+                        ++i;
+                    }
                 }
 
                 voteTotals[_proposalId] -= uint256(weightToRemove);
@@ -212,17 +235,28 @@ contract GaugeVotePlatform is Ownable2Step {
         _initBaseInfo(_account, proposalId);
 
         UserInfo storage user = userInfo[proposalId][_account];
+        bool weightInfoUpdated;
+        bool revoting;
+        int256 oldUserWeight;
 
         if (user.voteStatus > 0) {
-            int256 oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
+            revoting = true;
+            oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
 
             GaugeVote[] storage oldVotes = votes[proposalId][_account];
             uint256 oldLen = oldVotes.length;
             for (uint256 i = 0; i < oldLen;) {
-                _changeGaugeTotal(proposalId, oldVotes[i].gauge, -(int256(uint256(oldVotes[i].weight)) * oldUserWeight / int256(max_weight)));
-                unchecked { ++i; }
+                _changeGaugeTotal(
+                    proposalId,
+                    oldVotes[i].gauge,
+                    -(int256(uint256(oldVotes[i].weight)) * oldUserWeight / int256(max_weight))
+                );
+                unchecked {
+                    ++i;
+                }
             }
 
+            uint256 previousDelegatedWeight = (uint256(user.baseWeight) / WEIGHT_DIVISOR) * WEIGHT_DIVISOR;
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
             uint256 userBaseDiff = currentBalance - user.baseWeight;
             user.baseWeight = uint96(currentBalance);
@@ -234,20 +268,59 @@ contract GaugeVotePlatform is Ownable2Step {
 
             if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
                 delegation.sync(_account);
-                
-                pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(userBaseDiff));
-                emit PendingWeightAdjustment(proposalId, user.delegate, -int256(userBaseDiff));
+
+                uint256 currentDelegatedWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
+                if (currentDelegatedWeight > previousDelegatedWeight) {
+                    uint256 delegatedDiff = currentDelegatedWeight - previousDelegatedWeight;
+                    UserInfo storage del = userInfo[proposalId][user.delegate];
+                    (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);
+
+                    if (del.voteStatus == 0) {
+                        del.adjustedWeight -= int96(int256(delegatedDiff));
+                        emit UserWeightChange(proposalId, user.delegate, del.baseWeight, del.adjustedWeight);
+                    } else if (snapTs == 0 || uint256(del.lastVoteTime) > snapTs) {
+                        GaugeVote[] storage delegateVotes = votes[proposalId][user.delegate];
+                        uint256 len = delegateVotes.length;
+
+                        for (uint256 i = 0; i < len;) {
+                            _changeGaugeTotal(
+                                proposalId,
+                                delegateVotes[i].gauge,
+                                -(int256(uint256(delegateVotes[i].weight)) * int256(delegatedDiff) / int256(max_weight))
+                            );
+                            unchecked {
+                                ++i;
+                            }
+                        }
+
+                        voteTotals[proposalId] -= delegatedDiff;
+                        del.adjustedWeight -= int96(int256(delegatedDiff));
+                        emit UserWeightChange(proposalId, user.delegate, del.baseWeight, del.adjustedWeight);
+                        emit GaugeWeightsUpdated(proposalId, user.delegate);
+                    } else {
+                        uint256 pendingDiff = currentDelegatedWeight - snapWeight;
+                        pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(pendingDiff));
+                        emit PendingWeightAdjustment(proposalId, user.delegate, -int256(pendingDiff));
+                    }
+                }
             }
 
-            int96 pend = pendingWeightAdjustment[proposalId][_account];
-            if (pend != 0) {
-                pendingWeightAdjustment[proposalId][_account] = 0;
-                user.adjustedWeight += pend;
-            }
+            weightInfoUpdated = true;
+        }
 
+        int96 pend = pendingWeightAdjustment[proposalId][_account];
+        if (pend != 0) {
+            pendingWeightAdjustment[proposalId][_account] = 0;
+            user.adjustedWeight += pend;
+            weightInfoUpdated = true;
+        }
+
+        if (revoting) {
             int256 newUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
             voteTotals[proposalId] = uint256(int256(voteTotals[proposalId]) - oldUserWeight + newUserWeight);
+        }
 
+        if (weightInfoUpdated) {
             emit UserWeightChange(proposalId, _account, user.baseWeight, user.adjustedWeight);
         }
 
@@ -259,10 +332,12 @@ contract GaugeVotePlatform is Ownable2Step {
         for (uint256 i = 0; i < _weights.length; i++) {
             if (_weights[i] == 0) revert NoWeight();
             if (!gaugeRegistry.isRegisteredGauge(_gauges[i])) revert NotGauge();
+            if (!gaugeRegistry.isValidGauge(_gauges[i])) revert NotGauge();
             votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint16(_weights[i])}));
             totalweight += _weights[i];
         }
         if (totalweight > max_weight) revert MaxWeight();
+        if (totalweight != max_weight) revert InvalidWeightTotal();
 
         for (uint256 i = 0; i < _weights.length; i++) {
             _changeGaugeTotal(proposalId, _gauges[i], int256(_weights[i]) * userWeight / int256(max_weight));
@@ -318,7 +393,10 @@ contract GaugeVotePlatform is Ownable2Step {
         }
     }
 
-    function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account) {
+    function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights)
+        external
+        onlyAcceptedSigner(_account)
+    {
         uint256 proposalId = proposals.length - 1;
         uint8 vs = userInfo[proposalId][_account].voteStatus;
         if (msg.sender != _account && vs >= uint8(VoteStatus.Voted)) revert NotVoteAuth();
@@ -341,17 +419,14 @@ contract GaugeVotePlatform is Ownable2Step {
         }
 
         if (_endTime <= _startTime) revert BadTime();
+        if (_endTime < block.timestamp) revert BadTime();
         if (_endTime - _startTime < 3 days) revert BadTime();
         if (_endTime - _startTime > 6 days) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;
 
-        proposals.push(Proposal({
-            startTime: uint48(_startTime),
-            endTime: uint48(_endTime),
-            epoch: uint48(epoch)
-        }));
+        proposals.push(Proposal({startTime: uint48(_startTime), endTime: uint48(_endTime), epoch: uint48(epoch)}));
         emit NewProposal(proposals.length - 1, _startTime, _endTime);
     }
 
@@ -404,5 +479,4 @@ contract GaugeVotePlatform is Ownable2Step {
         surrogateRegistry = SurrogateRegistry(_surrogateRegistry);
         delegation = Delegation(_delegation);
     }
-
 }

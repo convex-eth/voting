@@ -47,11 +47,7 @@ contract GaugeVotePlatformTest is Test {
         surrogateRegistry = new SurrogateRegistry();
 
         platform = new GaugeVotePlatform(
-            address(this),
-            address(mockVlCVX),
-            address(gaugeRegistry),
-            address(surrogateRegistry),
-            address(delegation)
+            address(this), address(mockVlCVX), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
         );
 
         gauge1 = new MockCurveGauge();
@@ -149,6 +145,15 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 7 days);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = block.timestamp - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(GaugeVotePlatform.BadTime.selector);
+        platform.createProposal(startTime, endTime);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
@@ -300,6 +305,54 @@ contract GaugeVotePlatformTest is Test {
         platform.vote(alice, gauges, weights);
     }
 
+    function test_cannotVoteWithIncompleteWeightTotal() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        uint256[] memory weights = _getWeights(5000);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.InvalidWeightTotal.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
+    function test_cannotVoteWithEmptyGaugeList() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = new address[](0);
+        uint256[] memory weights = new uint256[](0);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.InvalidWeightTotal.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
+    function test_cannotVoteRegisteredGaugeThatBecomesKilled() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        gauge1.setKilled(true);
+
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.NotGauge.selector);
+        platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+    }
+
+    function test_cannotVoteRegisteredGaugeAfterControllerWeightRemoved() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge1), 0);
+
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.NotGauge.selector);
+        platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+    }
+
     // ========== Scenario 1: Delegate with two delegatees ==========
 
     function test_scenario1_delegateWithTwoDelegatees() public {
@@ -401,7 +454,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del,) = platform.userInfo(pid, alice);
         assertEq(bw, 3000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -419,7 +472,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 daveBw, int256 daveAdj,,, address daveDel, ) = platform.userInfo(pid, dave);
+        (uint256 daveBw, int256 daveAdj,,, address daveDel,) = platform.userInfo(pid, dave);
         assertEq(daveBw, 0);
         assertGt(daveAdj, 0);
         assertEq(daveDel, dave);
@@ -482,7 +535,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(surrogate);
         platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(1));
     }
 
@@ -500,7 +553,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(2));
     }
 
@@ -683,7 +736,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del,) = platform.userInfo(pid, alice);
         assertEq(bw, 1000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -920,8 +973,8 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 g1TotalAfterBob = platform.gaugeTotal(pid, address(gauge1));
-        uint256 expectedBobTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 expectedBobTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
         assertApproxEqAbs(g1TotalAfterBob, expectedBobTotal, WD);
 
         // Alice syncs mid-proposal
@@ -1082,6 +1135,110 @@ contract GaugeVotePlatformTest is Test {
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
+    function test_userBaseDiff_relockWithDelegateBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockAfterSyncBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        delegation.sync(alice);
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_externalSyncBeforeDelegateVotesThenDirectRevote() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        delegation.sync(alice);
+        vm.warp(block.timestamp + 1);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), mockVlCVX.balanceAtEpochOf(proposalEpoch, bob));
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), mockVlCVX.balanceAtEpochOf(proposalEpoch, alice));
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleRelock() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 800, dave);
+        _lockAndDelegate(dave, 400, address(0));
+        _warpToNextEpoch();
+
+        uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
+        vm.warp(currentEpoch + 6 days);
+
+        uint256 startTime = block.timestamp + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        platform.createProposal(startTime, endTime);
+        uint256 pid = platform.proposalCount() - 1;
+        (,, proposalEpoch) = platform.proposals(pid);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+
+        vm.warp(startTime);
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
     // ========== No double-counting: total weight never exceeds sum of all vlCVX ==========
 
     function test_noDoubleCounting_complexChain() public {
@@ -1092,8 +1249,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
 
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -1114,8 +1270,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
             + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
@@ -1147,7 +1302,7 @@ contract GaugeVotePlatformTest is Test {
         // Alice re-votes — should still use Bob as delegate for this proposal's epoch
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,,,, address aliceDel, ) = platform.userInfo(pid, alice);
+        (,,,, address aliceDel,) = platform.userInfo(pid, alice);
         assertEq(aliceDel, bob); // Still Bob, not Carol
     }
 

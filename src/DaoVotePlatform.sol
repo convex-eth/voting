@@ -7,7 +7,6 @@ import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract DaoVotePlatform is Ownable2Step {
-
     error NotStarted();
     error Ended();
     error NoWeight();
@@ -78,9 +77,7 @@ contract DaoVotePlatform is Ownable2Step {
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
     event OperatorSet(address indexed op, bool active);
 
-    constructor(address _owner, address _vlCVX, address _surrogateRegistry, address _delegation)
-        Ownable(_owner)
-    {
+    constructor(address _owner, address _vlCVX, address _surrogateRegistry, address _delegation) Ownable(_owner) {
         operators[_owner] = true;
         vlCVX = IvlCVX(_vlCVX);
         surrogateRegistry = SurrogateRegistry(_surrogateRegistry);
@@ -115,9 +112,11 @@ contract DaoVotePlatform is Ownable2Step {
         return uint256(_voteTotals[_proposalId].yes) + uint256(_voteTotals[_proposalId].no);
     }
 
-    function getVote(uint256 _proposalId, address _user) public view returns (
-        bool voted, uint256 yesWeight, uint256 noWeight, uint256 baseWeight, int256 adjustedWeight
-    ) {
+    function getVote(uint256 _proposalId, address _user)
+        public
+        view
+        returns (bool voted, uint256 yesWeight, uint256 noWeight, uint256 baseWeight, int256 adjustedWeight)
+    {
         UserInfo storage u = userInfo[_proposalId][_user];
         voted = u.voteStatus > 0;
         yesWeight = u.yesWeight;
@@ -179,12 +178,12 @@ contract DaoVotePlatform is Ownable2Step {
         emit UserWeightChange(_proposalId, _account, baseWeight, user.adjustedWeight);
 
         if (delegate != _account) {
+            uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
             UserInfo storage del = userInfo[_proposalId][delegate];
 
             if (del.voteStatus == 0) {
-                del.adjustedWeight -= int96(int256(baseWeight));
+                del.adjustedWeight -= int96(int256(currentDelWeight));
             } else {
-                uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
                 (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, epoch);
                 int256 weightToRemove;
 
@@ -219,11 +218,13 @@ contract DaoVotePlatform is Ownable2Step {
         _initBaseInfo(_account, proposalId);
 
         UserInfo storage user = userInfo[proposalId][_account];
+        bool weightInfoUpdated;
 
         if (user.voteStatus > 0) {
             int256 oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
             _changeVoteTotals(proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
 
+            uint256 previousDelegatedWeight = (uint256(user.baseWeight) / WEIGHT_DIVISOR) * WEIGHT_DIVISOR;
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
             uint256 userBaseDiff = currentBalance - user.baseWeight;
             user.baseWeight = uint96(currentBalance);
@@ -236,16 +237,38 @@ contract DaoVotePlatform is Ownable2Step {
             if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
                 delegation.sync(_account);
 
-                pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(userBaseDiff));
-                emit PendingWeightAdjustment(proposalId, user.delegate, -int256(userBaseDiff));
+                uint256 currentDelegatedWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
+                if (currentDelegatedWeight > previousDelegatedWeight) {
+                    uint256 delegatedDiff = currentDelegatedWeight - previousDelegatedWeight;
+                    UserInfo storage del = userInfo[proposalId][user.delegate];
+                    (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);
+
+                    if (del.voteStatus == 0) {
+                        del.adjustedWeight -= int96(int256(delegatedDiff));
+                        emit UserWeightChange(proposalId, user.delegate, del.baseWeight, del.adjustedWeight);
+                    } else if (snapTs == 0 || uint256(del.lastVoteTime) > snapTs) {
+                        _changeVoteTotals(proposalId, -int256(delegatedDiff), del.yesWeight, del.noWeight);
+                        del.adjustedWeight -= int96(int256(delegatedDiff));
+                        emit UserWeightChange(proposalId, user.delegate, del.baseWeight, del.adjustedWeight);
+                    } else {
+                        uint256 pendingDiff = currentDelegatedWeight - snapWeight;
+                        pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(pendingDiff));
+                        emit PendingWeightAdjustment(proposalId, user.delegate, -int256(pendingDiff));
+                    }
+                }
             }
 
-            int96 pend = pendingWeightAdjustment[proposalId][_account];
-            if (pend != 0) {
-                pendingWeightAdjustment[proposalId][_account] = 0;
-                user.adjustedWeight += pend;
-            }
+            weightInfoUpdated = true;
+        }
 
+        int96 pend = pendingWeightAdjustment[proposalId][_account];
+        if (pend != 0) {
+            pendingWeightAdjustment[proposalId][_account] = 0;
+            user.adjustedWeight += pend;
+            weightInfoUpdated = true;
+        }
+
+        if (weightInfoUpdated) {
             emit UserWeightChange(proposalId, _account, user.baseWeight, user.adjustedWeight);
         }
 
@@ -278,26 +301,32 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
-    function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
+    function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId)
+        public
+        onlyOperator
+    {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
             if (block.timestamp <= proposals[pCnt - 1].endTime + finalizationTime) revert PrevNotEnded();
         }
 
         if (_endTime <= _startTime) revert BadTime();
+        if (_endTime < block.timestamp) revert BadTime();
         if (_endTime - _startTime < 3 days) revert BadTime();
         if (_endTime - _startTime > 6 days) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;
 
-        proposals.push(Proposal({
-            startTime: uint48(_startTime),
-            endTime: uint48(_endTime),
-            epoch: uint48(epoch),
-            voteType: uint8(_voteType),
-            proposalId: uint104(_proposalId)
-        }));
+        proposals.push(
+            Proposal({
+                startTime: uint48(_startTime),
+                endTime: uint48(_endTime),
+                epoch: uint48(epoch),
+                voteType: uint8(_voteType),
+                proposalId: uint104(_proposalId)
+            })
+        );
         emit NewProposal(proposals.length - 1, _startTime, _endTime, _voteType);
     }
 

@@ -33,12 +33,7 @@ contract DaoVotePlatformTest is Test {
         delegation = new Delegation(address(mockVlCVX));
         surrogateRegistry = new SurrogateRegistry();
 
-        dao = new DaoVotePlatform(
-            address(this),
-            address(mockVlCVX),
-            address(surrogateRegistry),
-            address(delegation)
-        );
+        dao = new DaoVotePlatform(address(this), address(mockVlCVX), address(surrogateRegistry), address(delegation));
 
         dao.setOperator(operator, true);
     }
@@ -130,6 +125,15 @@ contract DaoVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
         dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter, 1);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = block.timestamp - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(DaoVotePlatform.BadTime.selector);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
@@ -626,7 +630,7 @@ contract DaoVotePlatformTest is Test {
         uint256 count = dao.getVoterCount(pid);
         for (uint256 i = 0; i < count; i++) {
             address voter = dao.getVoterAtIndex(pid, i);
-            (, , , uint256 base, int256 adjusted) = dao.getVote(pid, voter);
+            (,,, uint256 base, int256 adjusted) = dao.getVote(pid, voter);
             int256 effective = int256(base) + adjusted;
             if (effective > 0) total += uint256(effective);
         }
@@ -717,8 +721,8 @@ contract DaoVotePlatformTest is Test {
         // Bob votes first with alice's weight included
         _voteYes(bob);
         uint256 yesAfterBob = dao.getYes(pid);
-        uint256 expectedBobTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 expectedBobTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
         assertApproxEqAbs(yesAfterBob, expectedBobTotal, WD);
 
         // Alice syncs mid-proposal
@@ -728,7 +732,7 @@ contract DaoVotePlatformTest is Test {
         _voteNo(alice);
 
         // Bob's adjustedWeight should be 0 after Alice claims
-        (, , , , int256 bobAdj) = dao.getVote(pid, bob);
+        (,,,, int256 bobAdj) = dao.getVote(pid, bob);
         assertEq(bobAdj, 0);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -752,7 +756,7 @@ contract DaoVotePlatformTest is Test {
         _voteNo(alice);
 
         // Bob's adjustedWeight should be 0 after Alice claims
-        (, , , , int256 bobAdj) = dao.getVote(pid, bob);
+        (,,,, int256 bobAdj) = dao.getVote(pid, bob);
         assertEq(bobAdj, 0);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -776,7 +780,7 @@ contract DaoVotePlatformTest is Test {
         _voteYes(carol);
 
         // Dave's adjustedWeight should be 0 after all delegatees claimed
-        (, , , uint256 bw, int256 aw) = dao.getVote(pid, dave);
+        (,,, uint256 bw, int256 aw) = dao.getVote(pid, dave);
         assertEq(aw, 0);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -797,7 +801,7 @@ contract DaoVotePlatformTest is Test {
         // Dave re-votes — should process pending
         _voteYes(dave);
 
-        (, , , , int256 aw) = dao.getVote(pid, dave);
+        (,,,, int256 aw) = dao.getVote(pid, dave);
         assertEq(aw, 0);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -865,6 +869,108 @@ contract DaoVotePlatformTest is Test {
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
+    function test_userBaseDiff_relockWithDelegateBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _voteNo(alice);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+
+        _voteYes(bob);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockAfterSyncBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        delegation.sync(alice);
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _voteNo(alice);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+
+        _voteYes(bob);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_externalSyncBeforeDelegateVotesThenDirectRevote() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        delegation.sync(alice);
+        vm.warp(block.timestamp + 1);
+
+        _voteYes(bob);
+        _voteNo(alice);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleRelock() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 800, dave);
+        _lockAndDelegate(dave, 400, address(0));
+        _warpToNextEpoch();
+
+        uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
+        vm.warp(currentEpoch + 6 days);
+
+        uint256 startTime = block.timestamp + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
+        uint256 pid = dao.proposalCount() - 1;
+        (,, proposalEpoch,,) = dao.proposals(pid);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+
+        vm.warp(startTime);
+
+        _voteNo(alice);
+        _voteYes(dave);
+        _voteNo(bob);
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
     // ========== No double-counting: total weight never exceeds sum of all vlCVX ==========
 
     function test_noDoubleCounting_complexChain() public {
@@ -875,8 +981,7 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
 
         _voteYes(carol);
         _voteYes(alice);
@@ -897,8 +1002,7 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
             + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
 
         _voteYes(dave);
@@ -930,7 +1034,7 @@ contract DaoVotePlatformTest is Test {
         // Alice re-votes — should still use Bob as delegate for this proposal's epoch
         _voteYes(alice);
 
-        (, , , , , , address aliceDel, ) = dao.userInfo(pid, alice);
+        (,,,,,, address aliceDel,) = dao.userInfo(pid, alice);
         assertEq(aliceDel, bob);
     }
 
