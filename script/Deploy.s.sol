@@ -13,6 +13,7 @@ import "../src/FxGaugeRegistry.sol";
 import "../src/CurveGaugeExecutor.sol";
 import "../src/FxGaugeExecutor.sol";
 import "../src/CurveVoteExecutor.sol";
+import "../src/ResupplyVoteExecutor.sol";
 import "../src/CurveDaoProposer.sol";
 import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
@@ -41,6 +42,19 @@ contract Deploy is Script {
     address constant MSIG = 0xa3C5A1e09150B75ff251c1a7815A07182c3de2FB;
     address constant CONVEX_BOT = 0x724061efDFef4a421e8be05133ad24922D07b5Bf;
     address constant CONVEX_DEPLOYER = 0x947B7742C403f20e5FaCcDAc5E092C943E7D0277;
+    address constant VOTE_DELEGATE = 0x5349ffba494aC3c888ffa16fD438F44B8c67fB07;
+
+    uint256 constant DEFAULT_QUORUM = 1500; // 15%
+
+    ConvexCore core;
+
+    function _setOperator(address _platform, address _operator) internal {
+        core.execute(_platform, abi.encodeWithSignature("setOperator(address,bool)", _operator, true));
+    }
+
+    function _setGuardian(address _executor, address _guardian) internal {
+        core.execute(_executor, abi.encodeWithSignature("setGuardian(address,bool)", _guardian, true));
+    }
 
     function run() external {
         address deployer = msg.sender;
@@ -51,7 +65,7 @@ contract Deploy is Script {
         vm.startBroadcast();
 
         // ── 1. Deploy ConvexCore ──
-        ConvexCore core = new ConvexCore(initialOperators);
+        core = new ConvexCore(initialOperators);
         console.log("ConvexCore:", address(core));
 
         // ── 2. Deploy VotingRegistry ──
@@ -107,6 +121,9 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.VOTE_DAO, address(curveDaoVoting)));
         console.log("Registered CURVE -> VOTE_DAO");
 
+        _setOperator(address(curveDaoVoting), MSIG);
+        console.log("Set MSIG as operator on CurveDaoVoting");
+
         // ── 8. Deploy CurveGaugeVoting ──
         GaugeVotePlatform curveGaugeVoting = new GaugeVotePlatform(
             address(core),
@@ -120,21 +137,27 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.VOTE_GAUGE, address(curveGaugeVoting)));
         console.log("Registered CURVE -> VOTE_GAUGE");
 
+        _setOperator(address(curveGaugeVoting), MSIG);
+        console.log("Set MSIG as operator on CurveGaugeVoting");
+
         // ── 9. Deploy Executors ──
         CurveVoteExecutor curveVoteExecutor = new CurveVoteExecutor(
             address(core),
             address(curveDaoVoting),
-            address(0), // voteDelegate TBD
-            0           // quorumBps TBD
+            VOTE_DELEGATE,
+            DEFAULT_QUORUM
         );
         console.log("CurveVoteExecutor:", address(curveVoteExecutor));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.DAO_EXECUTOR, address(curveVoteExecutor)));
         console.log("Registered CURVE -> DAO_EXECUTOR");
 
+        _setGuardian(address(curveVoteExecutor), MSIG);
+        console.log("Set MSIG as guardian on CurveVoteExecutor");
+
         CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor(
-            address(curveGaugeVoting),
-            address(0) // voteDelegate TBD
+            VOTE_DELEGATE,
+            address(curveGaugeVoting)
         );
         console.log("CurveGaugeExecutor:", address(curveGaugeExecutor));
 
@@ -187,6 +210,9 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.VOTE_DAO, address(fxDaoVoting)));
         console.log("Registered FX -> VOTE_DAO");
 
+        _setOperator(address(fxDaoVoting), MSIG);
+        console.log("Set MSIG as operator on FxDaoVoting");
+
         // ── 14. Deploy F(x) GaugeVoting ──
         GaugeVotePlatform fxGaugeVoting = new GaugeVotePlatform(
             address(core),
@@ -199,6 +225,9 @@ contract Deploy is Script {
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.VOTE_GAUGE, address(fxGaugeVoting)));
         console.log("Registered FX -> VOTE_GAUGE");
+
+        _setOperator(address(fxGaugeVoting), MSIG);
+        console.log("Set MSIG as operator on FxGaugeVoting");
 
         // ── 15. Deploy F(x) GenericDaoProposer ──
         GenericDaoProposer fxDaoProposer = new GenericDaoProposer(
@@ -256,6 +285,9 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.VOTE_DAO, address(fraxDaoVoting)));
         console.log("Registered FRAX -> VOTE_DAO");
 
+        _setOperator(address(fraxDaoVoting), MSIG);
+        console.log("Set MSIG as operator on FraxDaoVoting");
+
         // ── 20. Deploy Frax GenericDaoProposer ──
         GenericDaoProposer fraxDaoProposer = new GenericDaoProposer(
             address(core),
@@ -277,6 +309,20 @@ contract Deploy is Script {
         core.execute(address(fraxDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(fraxDaoProposer), true));
         console.log("Set FraxDaoProposer as operator on FraxDaoVoting");
 
+        // ── 22. Deploy ResupplyVoteExecutor ──
+        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor(
+            address(core),
+            address(fraxDaoVoting),
+            DEFAULT_QUORUM
+        );
+        console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_EXECUTOR, address(resupplyVoteExecutor)));
+        console.log("Registered RESUPPLY -> DAO_EXECUTOR");
+
+        _setGuardian(address(resupplyVoteExecutor), MSIG);
+        console.log("Set MSIG as guardian on ResupplyVoteExecutor");
+
         vm.stopBroadcast();
 
         console.log("\n=== Deployment Summary ===");
@@ -293,5 +339,6 @@ contract Deploy is Script {
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
         console.log("FraxDaoVoting:", address(fraxDaoVoting));
         console.log("FraxDaoProposer:", address(fraxDaoProposer));
+        console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
     }
 }
