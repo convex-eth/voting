@@ -14,6 +14,7 @@ import "../src/CurveGaugeExecutor.sol";
 import "../src/FxGaugeExecutor.sol";
 import "../src/CurveVoteExecutor.sol";
 import "../src/ResupplyVoteExecutor.sol";
+import "../src/ResupplyDaoProposer.sol";
 import "../src/CurveDaoProposer.sol";
 import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
@@ -323,6 +324,34 @@ contract Deploy is Script {
         _setGuardian(address(resupplyVoteExecutor), MSIG);
         console.log("Set MSIG as guardian on ResupplyVoteExecutor");
 
+        // ── 23. Deploy Resupply DaoVoting ──
+        DaoVotePlatform resupplyDaoVoting = new DaoVotePlatform(
+            address(core),
+            VLCVX,
+            address(surrogateRegistry),
+            address(daoDelegation)
+        );
+        console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.VOTE_DAO, address(resupplyDaoVoting)));
+        console.log("Registered RESUPPLY -> VOTE_DAO");
+
+        _setOperator(address(resupplyDaoVoting), MSIG);
+        console.log("Set MSIG as operator on ResupplyDaoVoting");
+
+        // ── 24. Deploy ResupplyDaoProposer ──
+        ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer(
+            address(core),
+            address(resupplyDaoVoting)
+        );
+        console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_PROPOSER, address(resupplyDaoProposer)));
+        console.log("Registered RESUPPLY -> DAO_PROPOSER");
+
+        _setOperator(address(resupplyDaoVoting), address(resupplyDaoProposer));
+        console.log("Set ResupplyDaoProposer as operator on ResupplyDaoVoting");
+
         vm.stopBroadcast();
 
         console.log("\n=== Deployment Summary ===");
@@ -339,6 +368,8 @@ contract Deploy is Script {
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
         console.log("FraxDaoVoting:", address(fraxDaoVoting));
         console.log("FraxDaoProposer:", address(fraxDaoProposer));
+        console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
+        console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
         console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
     }
 }
