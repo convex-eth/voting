@@ -35,6 +35,7 @@ contract ResupplyDaoProposer is Ownable2Step {
     }
 
     function setProposalLength(uint256 _proposalLength) external onlyOwner {
+        require(_proposalLength >= 3 days && _proposalLength <= 6 days, "Bad proposal length");
         proposalLength = _proposalLength;
         emit ProposalLengthSet(_proposalLength);
     }

@@ -92,13 +92,23 @@ contract GenericDaoProposerTest is Test {
     function test_setProposalLength() public {
         assertEq(proposer.proposalLength(), 3 days);
 
-        proposer.setProposalLength(7 days);
-        assertEq(proposer.proposalLength(), 7 days);
+        proposer.setProposalLength(5 days);
+        assertEq(proposer.proposalLength(), 5 days);
+    }
+
+    function test_cannotSetProposalLengthTooShort() public {
+        vm.expectRevert("Bad proposal length");
+        proposer.setProposalLength(3 days - 1);
+    }
+
+    function test_cannotSetProposalLengthTooLong() public {
+        vm.expectRevert("Bad proposal length");
+        proposer.setProposalLength(6 days + 1);
     }
 
     function test_onlyOwnerCanSetProposalLength() public {
         vm.prank(notWhitelisted);
         vm.expectRevert();
-        proposer.setProposalLength(7 days);
+        proposer.setProposalLength(5 days);
     }
 }
