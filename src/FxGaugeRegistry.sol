@@ -31,7 +31,7 @@ contract FxGaugeRegistry is Ownable2Step {
         return activeGaugeIndex[_gauge] > 0;
     }
 
-    function setGauge(address _gauge) external {
+    function setGauge(address _gauge) external onlyOwner {
         bool isActive = isValidGauge(_gauge);
         uint256 index = activeGaugeIndex[_gauge];
 

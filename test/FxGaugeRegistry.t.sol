@@ -28,6 +28,7 @@ contract FxGaugeRegistryTest is Test {
     MockFxGauge internal mockGauge;
 
     address internal owner = address(this);
+    address internal nonOwner = makeAddr("nonOwner");
     address internal gauge = makeAddr("gauge");
 
     address constant GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
@@ -78,6 +79,15 @@ contract FxGaugeRegistryTest is Test {
 
         assertEq(registry.gaugeLength(), 1);
         assertTrue(registry.isRegisteredGauge(gauge));
+    }
+
+    function test_onlyOwnerCanSetGauge() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+
+        vm.prank(nonOwner);
+        vm.expectRevert();
+        registry.setGauge(gauge);
     }
 
     function test_setGauge_removesInvalid() public {
