@@ -6,7 +6,7 @@ GaugeExecutor takes a finalized proposal's vote results from GaugeVotePlatform a
 
 ## How It Works
 
-1. After a proposal is finalized (`isFinalized(proposalId) == true`), an operator calls `executeGaugeVote(proposalId, gauges)`
+1. After a proposal is finalized (`isFinalized(proposalId) == true`), anyone can call `executeGaugeVote(proposalId, gauges)`
 2. The contract verifies the proposal is finalized and is the most recent proposal
 3. For each gauge in the input array, the contract calculates the basis point weight from GaugeVotePlatform's stored totals
 4. The gauges and calculated weights are submitted to VoteDelegateExtension, which calls Curve's `GaugeController.vote_for_gauge_weights` for each gauge
@@ -25,7 +25,7 @@ This produces a basis point value (0-10000). Gauges not present in the proposal 
 The contract calculates weights — the caller only provides the list of gauges. However, the caller is responsible for:
 
 - **Correct ordering**: Gauges must be sorted so that decreases (weight 0) are processed before increases. If not sorted correctly, Curve's GaugeController will revert because the running total would exceed 10,000 bps.
-- **No duplicates**: Submitting the same gauge twice causes a revert from Curve's GaugeController.
+- **No duplicates**: The executor rejects any gauge that was already submitted for the proposal, including duplicates within the same batch.
 - **Previous round gauges**: Gauges that received votes in a previous round but are absent from the current proposal must be included so their weight is set to 0, clearing the previous allocation.
 - **Completeness**: If a previously-voted gauge is omitted, it retains its old weight until the 10-day vote lock on Curve's side expires.
 
@@ -38,7 +38,7 @@ The contract relies on natural reverts rather than local validation:
 | Proposal not finalized | `NotFinalized` custom error |
 | Proposal not the latest | `NotLatestProposal` custom error |
 | `voteTotals == 0` (no votes) | Division by zero panic |
-| Duplicate gauge | Curve's GaugeController reverts |
+| Duplicate gauge in same or previous batch | `GaugeAlreadySubmitted` custom error |
 | Incorrect sort order | Curve's GaugeController reverts (running total > 10000) |
 | Vote locked (10-day) | Curve's GaugeController reverts |
 
@@ -46,6 +46,4 @@ The contract relies on natural reverts rather than local validation:
 
 ### Rounding Dust
 
-Because each gauge weight is calculated independently via integer division (`gaugeTotal * 10000 / voteTotals`), the sum of all weights may be 9,999 instead of 10,000. The difference is at most `N - 1` basis points where N is the number of gauges, which is negligible for Curve gauge allocation purposes.
-
-If exact 10,000 is desired, the contract could track the cumulative weight across executions and bump the last gauge by the residual (e.g. if 9,999 has been distributed so far, the final gauge gets `calculatedWeight + 1`). This would require per-execution state tracking (count of gauges processed, running weight total). The current implementation opts for simplicity — the ~1 bps dust is immaterial.
+Because each gauge weight is calculated independently via integer division (`gaugeTotal * 10000 / voteTotals`), intermediate batches may leave rounding dust. The executor tracks submitted positive gauge count and cumulative submitted weight. When the batch causes all positive gauges to be submitted and the cumulative weight is below 10,000, the residual is added to the last nonzero gauge in that batch.

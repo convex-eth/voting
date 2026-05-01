@@ -17,6 +17,7 @@ No CurveGaugeRegistry — there are no gauges to validate.
 ## Proposals
 
 - Created by operators via `createProposal(startTime, endTime, voteType, proposalId)`, same 3-6 day duration constraint as GaugeVotePlatform
+- `endTime` must not be before the current block timestamp. Historical `startTime` values are allowed for external protocol proposals as long as their local voting window has not fully elapsed.
 - Each proposal records an epoch: `vlCVX.checkpointEpoch()` then `epoch = vlCVX.epochCount() - 2`
 - A new proposal cannot be created until the previous proposal's `endTime + finalizationTime` has passed
 - The `proposalId` is an external reference ID (e.g. a snapshot hash, forum post ID, or off-chain governance identifier) that gets passed through to `VoteExecutor` and ultimately to `IVoteDelegationExtension.DaoVoteWithWeights()` as the `_voteId` parameter. This allows the on-chain vote to be linked back to its off-chain proposal context.
@@ -28,7 +29,7 @@ No CurveGaugeRegistry — there are no gauges to validate.
 | `Ownership` | 0 | Major admin actions: changing contract ownership, upgrading implementations, modifying critical parameters | Higher (e.g. 30%+) |
 | `Parameter` | 1 | Routine parameter changes: adjusting fees, rates, limits, rewards | Lower (e.g. 15%+) |
 
-The `voteType` is purely informational metadata — it does not affect voting mechanics. Quorum enforcement is intentionally **not** done on-chain.
+The `voteType` is purely informational metadata — it does not affect voting mechanics. Quorum enforcement is done by DAO executors, not by the voting platform.
 
 ### Finalization Window
 
@@ -152,5 +153,6 @@ VoteExecutor takes a finalized DAO proposal's results and submits them on-chain 
 2. Verify caller is a guardian if not yet finalized
 3. Verify not already executed
 4. Read proposal's `proposalId`, `voteType`, yes/no totals from DaoVotePlatform
-5. Call `DaoVoteWithWeights(proposalId, yes, no, isOwnership)` on the extension
+5. If `quorumBps` is nonzero, require nonzero vlCVX supply at the proposal epoch and enough total votes to meet quorum. `quorumBps` is capped at 10000.
 6. Mark `executed[proposalId] = true`
+7. Call `DaoVoteWithWeights(proposalId, yes, no, isOwnership)` on the extension

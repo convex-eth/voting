@@ -149,6 +149,8 @@ The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) automatically c
 
 Changes made via `setDelegate()` take effect starting the **next** epoch. The current epoch is unaffected. Calling `setDelegate(address(0))` removes delegation entirely.
 
+Calling `sync(user)` after a delegate change respects the same epoch boundary: current-epoch weight is updated only for the delegate that was already active in the current epoch, while the newly selected delegate receives weight starting next epoch.
+
 ## DAO Voting
 
 DaoVotePlatform handles yes/no votes. Users allocate their weight between "yes" and "no" using basis points (0-10000), allowing nuanced positions. A pure yes vote is `(10000, 0)`, a pure no is `(0, 10000)`, and a split vote like `(6000, 4000)` expresses 60/40 sentiment.
@@ -172,6 +174,7 @@ Vote type is metadata only — it does not affect on-chain mechanics. Quorum is 
 ```
 
 - Proposals are created by operators with a 3-6 day voting window
+- Proposal end time must not already be in the past; external proposers may use historical start times only while the voting window is still open
 - A new proposal cannot be created until the previous proposal's end time plus finalization window has passed
 - The `proposalId` stored is an external reference (e.g. Snapshot hash, forum post ID) that gets passed through to the executor and ultimately to the external protocol's voting contract
 - After voting ends, a 12-hour finalization window allows guardians to execute early if needed
@@ -183,7 +186,7 @@ Users can register surrogate addresses that vote on their behalf. If a user has 
 
 ## Gauge Voting
 
-GaugeVotePlatform handles gauge weight allocation votes. Users distribute their voting weight across active gauges using basis points. The platform validates that voted addresses are active gauges via the platform's GaugeRegistry.
+GaugeVotePlatform handles gauge weight allocation votes. Users distribute 10000 basis points of voting weight across active gauges. The platform validates that voted addresses are registered and currently active via the platform's GaugeRegistry.
 
 ### Key Differences from DAO Voting
 
@@ -221,7 +224,7 @@ Gauge registries maintain the list of active, voteable gauges per platform. They
 
 ### CurveGaugeRegistry
 
-Permissionless. Anyone can call `setGauge(gauge)`. The registry checks on-chain that the gauge has non-zero weight on the Curve Gauge Controller and is not killed. If the gauge becomes invalid, calling `setGauge` again removes it.
+Permissionless. Anyone can call `setGauge(gauge)`. The registry checks on-chain that the gauge has non-zero weight on the Curve Gauge Controller and, for gauges that expose `is_killed()`, is not killed. Legacy Curve gauges without `is_killed()` are treated as valid when they still have non-zero controller weight. If the gauge becomes invalid, calling `setGauge` again removes it.
 
 ### FxGaugeRegistry
 
@@ -230,6 +233,8 @@ Owned by ConvexCore. The owner calls `setGauge(gauge)` to add or remove gauges. 
 ## Proposers
 
 Proposers create proposals on the voting platforms. Each platform has its own proposer type tailored to the external protocol's governance model.
+
+All proposer `proposalLength` settings are constrained to the voting platform window of 3-6 days.
 
 ### CurveDaoProposer
 
@@ -261,11 +266,11 @@ Submits DAO vote results to Curve's `IVoteDelegationExtension.DaoVoteWithWeights
 | Anyone | After `isFinalized()` (past 12-hour window) |
 | Guardian | After `isFinished()` (voting ended, during finalization window) |
 
-Includes quorum enforcement: total votes must meet the configured `quorumBps` threshold relative to vlCVX total supply at the proposal epoch.
+Includes quorum enforcement: `quorumBps` is capped at 10000. If it is nonzero, the proposal epoch must have nonzero vlCVX supply and total votes must meet the configured threshold relative to that supply.
 
 ### CurveGaugeExecutor
 
-Submits gauge vote results to Curve's `IVoteDelegateExtension.GaugeVote()`. Accepts a list of gauges to submit (allows incremental submission across multiple transactions). Tracks submitted gauge count and weight per proposal. Must submit the latest proposal only, and the epoch must not have expired.
+Submits gauge vote results to Curve's `IVoteDelegateExtension.GaugeVote()`. Accepts a list of gauges to submit (allows incremental submission across multiple transactions). Tracks submitted gauges, positive gauge count, and weight per proposal. Each gauge can be submitted only once. Must submit the latest proposal only, and the epoch must not have expired.
 
 ### FxGaugeExecutor
 
@@ -283,6 +288,15 @@ forge install
 
 # Run tests
 forge test
+
+# Run pinned mainnet adapter checks
+MAINNET_RPC_URL=$ETH_RPC_URL forge test --match-contract MainnetIntegrationTest
+
+# Run pinned mainnet deployment preflight
+MAINNET_RPC_URL=$ETH_RPC_URL forge test --match-contract DeployPreflightTest
+
+# Dry-run the deployment script against a pinned mainnet fork
+forge script script/Deploy.s.sol:Deploy --rpc-url $ETH_RPC_URL --fork-block-number <PINNED_BLOCK> -vv
 
 # Deploy to local fork
 anvil --fork-url $ETH_RPC_URL
