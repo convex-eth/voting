@@ -290,6 +290,8 @@ contract GaugeVotePlatform is Ownable2Step {
             if (_changeValue > 0) {
                 _gaugeEntries[_proposalId].push(GaugeTotalEntry({gauge: _gauge, totalWeight: uint96(absVal)}));
                 _gaugeIndex[_proposalId][_gauge] = _gaugeEntries[_proposalId].length;
+            } else {
+                revert("Negative gauge total");
             }
             return;
         }

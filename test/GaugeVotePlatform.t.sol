@@ -803,4 +803,370 @@ contract GaugeVotePlatformTest is Test {
 
         assertFalse(platform.isFinalized(pid));
     }
+
+    // ========== Invariant: voteTotals == sum of all voted users' effective weights ==========
+
+    function _sumAllEffectiveWeights(uint256 pid) internal view returns (uint256 total) {
+        uint256 count = platform.getVoterCount(pid);
+        for (uint256 i = 0; i < count; i++) {
+            address voter = platform.getVoterAtIndex(pid, i);
+            (,,,, int256 adjusted) = platform.getVote(pid, voter);
+            (uint256 base,,,,,) = platform.userInfo(pid, voter);
+            int256 effective = int256(base) + adjusted;
+            if (effective > 0) total += uint256(effective);
+        }
+    }
+
+    function test_invariant_voteTotalsMatchesEffectiveWeights() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _lockAndDelegate(bob, 2000, address(0));
+        _lockAndDelegate(carol, 500, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(carol, _getGauges(address(gauge3)), _getWeights(10000));
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_invariant_delegationChainTotals() public {
+        _lockAndDelegate(alice, 1000, carol);
+        _lockAndDelegate(bob, 500, carol);
+        _lockAndDelegate(carol, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(carol, _getGauges(address(gauge3)), _getWeights(10000));
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_invariant_revotePreservesTotals() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _lockAndDelegate(bob, 500, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge2)), _getWeights(10000));
+        uint256 totalsBefore = platform.voteTotals(pid);
+        assertEq(totalsBefore, _sumAllEffectiveWeights(pid));
+
+        _vote(alice, _getGauges(address(gauge3)), _getWeights(10000));
+
+        uint256 totalsAfter = platform.voteTotals(pid);
+        assertEq(totalsAfter, _sumAllEffectiveWeights(pid));
+        assertEq(totalsBefore, totalsAfter);
+    }
+
+    function test_invariant_delegateeVotesAfterDelegate() public {
+        _lockAndDelegate(carol, 2000, address(0));
+        _lockAndDelegate(alice, 1000, carol);
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_invariant_pureDelegate() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 500, dave);
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_invariant_gaugeTotalsEqualVoteTotals() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge2)), _getWeights(10000));
+
+        uint256 gaugeSum;
+        uint256 count = platform.getGaugeCount(pid);
+        for (uint256 i = 0; i < count; i++) {
+            (, uint256 weight) = platform.getGaugeEntry(pid, i);
+            gaugeSum += weight;
+        }
+
+        uint256 tolerance = count * WD;
+        assertApproxEqAbs(gaugeSum, platform.voteTotals(pid), tolerance);
+    }
+
+    // ========== Timestamp Branching: delegate voted BEFORE sync ==========
+
+    function test_timestampDelegateVotedBeforeSync() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Bob votes first with alice's weight included
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 g1TotalAfterBob = platform.gaugeTotal(pid, address(gauge1));
+        uint256 expectedBobTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        assertApproxEqAbs(g1TotalAfterBob, expectedBobTotal, WD);
+
+        // Alice syncs mid-proposal
+        delegation.sync(alice);
+
+        // Alice votes — should trigger timestamp comparison
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        // Bob's adjustedWeight should be 0 after Alice claims
+        (,,,, int256 bobAdj) = platform.getVote(pid, bob);
+        assertEq(bobAdj, 0);
+
+        // Gauge1 should now reflect only Bob's own weight
+        uint256 g1TotalAfterAlice = platform.gaugeTotal(pid, address(gauge1));
+        uint256 expectedBobOwn = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+        assertApproxEqAbs(g1TotalAfterAlice, expectedBobOwn, WD);
+
+        // Totals should be correct
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== Timestamp Branching: delegate voted AFTER sync ==========
+
+    function test_timestampDelegateVotedAfterSync() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Alice syncs first
+        delegation.sync(alice);
+
+        // Bob votes after sync
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Alice votes — delegate voted AFTER sync, so weightToRemove = currentDelWeight
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        // Bob's adjustedWeight should be 0 after Alice claims
+        (,,,, int256 bobAdj) = platform.getVote(pid, bob);
+        assertEq(bobAdj, 0);
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== Pending Weight Accumulation and Processing ==========
+
+    function test_pendingAccumulationFromMultipleDelegatees() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 500, dave);
+        _lockAndDelegate(carol, 300, dave);
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Dave votes first with all delegatees' weight
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // All delegatees vote — each should push pending to Dave
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+        _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Dave's adjustedWeight should be 0 after all delegatees claimed
+        (,,,, int256 daveAdj) = platform.getVote(pid, dave);
+        assertEq(daveAdj, 0);
+
+        // Totals should be correct
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_delegateRevoteProcessesPending() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(dave, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Dave votes
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Alice votes, pushing pending to Dave
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        (,,,, int256 daveAdjBefore) = platform.getVote(pid, dave);
+
+        // Dave re-votes — should process pending
+        _vote(dave, _getGauges(address(gauge3)), _getWeights(10000));
+
+        (,,,, int256 daveAdjAfter) = platform.getVote(pid, dave);
+        // After processing pending, Dave's adjustedWeight should be 0 (no more delegatees)
+        assertEq(daveAdjAfter, 0);
+
+        // Totals preserved
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== userBaseDiff: Relock Mid-Proposal ==========
+
+    function test_userBaseDiff_relockMidProposal() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+
+        // Alice votes
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 g1TotalBefore = platform.gaugeTotal(pid, address(gauge1));
+        assertGt(g1TotalBefore, 0);
+
+        // Alice relocks mid-proposal (replaces boosted with higher value)
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+
+        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        assertGt(aliceBalAfter, aliceBalBefore);
+
+        // Alice re-votes
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 g1TotalAfter = platform.gaugeTotal(pid, address(gauge1));
+        assertGt(g1TotalAfter, g1TotalBefore);
+
+        // Verify totals match
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockWithDelegate() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Bob votes first
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Alice votes
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+
+        // Alice relocks mid-proposal (replaces boosted with higher value)
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+
+        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        assertGt(aliceBalAfter, aliceBalBefore);
+
+        // Alice re-votes — this triggers userBaseDiff > 0 with delegate
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        // Bob's pending should have been reduced by Alice's growth
+        int256 bobPending = platform.pendingWeightAdjustment(pid, bob);
+        assertLt(bobPending, 0);
+
+        // Bob re-votes to pick up pending
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Totals should be correct
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== No double-counting: total weight never exceeds sum of all vlCVX ==========
+
+    function test_noDoubleCounting_complexChain() public {
+        _lockAndDelegate(alice, 1000, carol);
+        _lockAndDelegate(bob, 500, carol);
+        _lockAndDelegate(carol, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+
+        _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+
+        uint256 actualTotal = platform.voteTotals(pid);
+        uint256 tolerance = 3 * WD;
+        assertApproxEqAbs(actualTotal, expectedTotal, tolerance);
+        assertLe(actualTotal, expectedTotal + tolerance);
+    }
+
+    function test_noDoubleCounting_pureDelegateMultiple() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 500, dave);
+        _lockAndDelegate(carol, 300, dave);
+        _lockAndDelegate(dave, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+        _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 actualTotal = platform.voteTotals(pid);
+        uint256 tolerance = 4 * WD;
+        assertApproxEqAbs(actualTotal, expectedTotal, tolerance);
+        assertLe(actualTotal, expectedTotal + tolerance);
+    }
+
+    // ========== Delegation change takes effect next epoch, not current ==========
+
+    function test_delegateChangeMidProposalDoesNotAffectCurrent() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Alice votes with Bob as delegate
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Alice changes delegate mid-proposal (takes effect next epoch)
+        vm.prank(alice);
+        delegation.setDelegate(carol);
+
+        // Alice re-votes — should still use Bob as delegate for this proposal's epoch
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+
+        (,,,, address aliceDel, ) = platform.userInfo(pid, alice);
+        assertEq(aliceDel, bob); // Still Bob, not Carol
+    }
+
+    // ========== Re-vote after delegation balance change ==========
+
+    function test_revoteAfterNewDelegateeJoins() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(dave, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Bob locks (but does NOT delegate yet)
+        mockVlCVX.mockLock(bob, 500 * WD, 500 * WD);
+
+        // Dave re-votes — delDelta should still reflect Alice's delegation
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
 }

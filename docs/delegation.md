@@ -53,17 +53,16 @@ The snapshot allows voting contracts to determine whether a delegate voted befor
 
 ### Sync Snapshot
 
-The `SyncSnapshot` struct is packed into a single storage slot:
+The `SyncSnapshot` struct is packed into a single storage slot, keyed by epoch in a per-user mapping:
 
 ```
 struct SyncSnapshot {
-    uint64 timestamp;    // block.timestamp when sync was called
+    uint96 timestamp;    // block.timestamp when sync was called
     uint32 preSyncWeight; // user's delegation weight before this sync (truncated)
-    uint32 epoch;        // epoch number of this sync
 }
 ```
 
-The `getSyncSnapshot(address)` view function returns `(epoch, preSyncWeight, timestamp)` as `uint256` values, with `preSyncWeight` already multiplied by `WEIGHT_DIVISOR` to match the scale used by voting contracts.
+The `getSyncSnapshot(user, epoch)` view function returns `(preSyncWeight, timestamp)` as `uint256` values, with `preSyncWeight` already multiplied by `WEIGHT_DIVISOR` to match the scale used by voting contracts.
 
 ### setDelegate vs sync
 
@@ -97,7 +96,7 @@ Both `GaugeVotePlatform` and `DaoVotePlatform` read from the Delegation contract
 2. `delegation.balanceAtEpochOf(delegate, epoch)` — the delegate's total accumulated delegatee weight
 3. `delegation.userWeightAtEpochOf(user, epoch)` — the user's own truncated weight (used for removing from delegate)
 4. `delegation.sync(user)` — called when the user's vlCVX balance exceeds their Delegation weight (truncated comparison)
-5. `delegation.getSyncSnapshot(user)` — returns `(epoch, preSyncWeight, timestamp)` used for timestamp-based weight removal in voting contracts
+5. `delegation.getSyncSnapshot(user, epoch)` — returns `(preSyncWeight, timestamp)` used for timestamp-based weight removal in voting contracts
 
 ### The Truncation Problem
 
@@ -145,6 +144,6 @@ When a user adds vlCVX weight mid-proposal (via lock/relock + sync), their deleg
 | `userWeightAtEpochOf(epoch, user)` | User's own truncated weight at a specific epoch |
 | `getDelegateAtEpoch(user, epoch)` | Who the user delegated to at a given epoch |
 | `syncedUserEpoch(user)` | The epoch up to which the user has been synced |
-| `getSyncSnapshot(user)` | `(epoch, preSyncWeight, timestamp)` — preSyncWeight multiplied by WEIGHT_DIVISOR |
+| `getSyncSnapshot(user, epoch)` | `(preSyncWeight, timestamp)` — preSyncWeight multiplied by WEIGHT_DIVISOR |
 
 All weight-returning functions (except `getSyncSnapshot`) multiply by `WEIGHT_DIVISOR` (1e17) to convert back from the truncated uint32 representation.
