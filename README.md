@@ -1,8 +1,8 @@
 # Convex Voting Platform
 
-On-chain voting infrastructure for Convex Finance, enabling vlCVX holders to participate in governance across multiple external protocols. The system supports both **DAO voting** (yes/no decisions) and **gauge voting** (weight allocation) across Curve, F(x), and Frax/Resupply platforms.
+On-chain voting infrastructure for Convex Finance, enabling vlCVX holders to participate in governance across multiple external protocols. The system supports both **DAO voting** (yes/no decisions) and **gauge voting** (weight allocation) across Curve, F(x), Frax, and Resupply platforms.
 
-Convex will use this platform to aggregate community sentiment from vlCVX holders and delegates, then submit consolidated votes on-chain to each protocol's governance contracts. The same infrastructure will eventually serve as the foundation for direct Convex ownership and on-chain treasury management, shifting administrative control away from multisig signers toward transparent, token-weighted governance.
+Convex will use this platform to aggregate community sentiment from vlCVX holders and delegates, then submit consolidated votes on-chain to each protocol's governance contracts. The same infrastructure will eventually serve as the foundation for direct on-chain ownership of Convex, shifting administrative control away from multisig signers toward transparent, token-weighted governance.
 
 ## Registry
 
