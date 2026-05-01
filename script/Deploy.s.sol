@@ -359,8 +359,12 @@ contract Deploy is Script {
         console.log("VotingRegistry:", address(registry));
         console.log("CurveDaoVoting:", address(curveDaoVoting));
         console.log("CurveGaugeVoting:", address(curveGaugeVoting));
+        console.log("CurveGaugeRegistry:", address(curveGaugeRegistry));
+        console.log("CurveVoteExecutor:", address(curveVoteExecutor));
+        console.log("CurveGaugeExecutor:", address(curveGaugeExecutor));
         console.log("CurveDaoProposer:", address(curveDaoProposer));
         console.log("GaugeProposer:", address(curveGaugeProposer));
+        console.log("FxGaugeRegistry:", address(fxGaugeRegistry));
         console.log("FxDaoVoting:", address(fxDaoVoting));
         console.log("FxGaugeVoting:", address(fxGaugeVoting));
         console.log("FxDaoProposer:", address(fxDaoProposer));
