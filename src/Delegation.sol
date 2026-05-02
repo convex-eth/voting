@@ -76,7 +76,7 @@ contract Delegation {
         }
 
         if (_delegate != address(0)) {
-            _syncUser(msg.sender, _delegate, false);
+            _syncUser(msg.sender, _delegate, vlCVX.epochCount() - 1, FILL_EPOCHS);
         }
 
         emit DelegateSet(msg.sender, _delegate);
@@ -91,8 +91,9 @@ contract Delegation {
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
         if (len == 0) return;
-        address delegate = history[len - 1].delegate;
-        if (delegate == address(0)) return;
+
+        address currentDelegate = _getDelegateAtEpoch(history, currentEpoch);
+        address futureDelegate = history[len - 1].delegate;
 
         uint256 offset = currentEpoch & 7;
         EpochWeightingEntry memory entry = userEpochWeights[_user][currentEpoch >> 3];
@@ -105,11 +106,26 @@ contract Delegation {
             timestamp: uint96(block.timestamp)
         });
 
-        _syncUser(_user, delegate, true);
+        if (currentDelegate != address(0)) {
+            if (currentDelegate == futureDelegate) {
+                _syncUser(_user, currentDelegate, currentEpoch, FILL_EPOCHS + 1);
+            } else {
+                _syncUser(_user, currentDelegate, currentEpoch, 1);
+                if (futureDelegate != address(0)) {
+                    _syncUser(_user, futureDelegate, vlCVX.epochCount() - 1, FILL_EPOCHS);
+                }
+            }
+        } else if (futureDelegate != address(0)) {
+            _syncUser(_user, futureDelegate, vlCVX.epochCount() - 1, FILL_EPOCHS);
+        }
     }
 
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
         SetDelegateRecord[] storage history = delegateHistory[_user];
+        return _getDelegateAtEpoch(history, _epoch);
+    }
+
+    function _getDelegateAtEpoch(SetDelegateRecord[] storage history, uint256 _epoch) internal view returns (address) {
         uint256 len = history.length;
         for (uint256 i = len; i > 0;) {
             unchecked { --i; }
@@ -120,20 +136,11 @@ contract Delegation {
         return address(0);
     }
 
-    function _syncUser(address _user, address _delegate, bool _includeCurrentEpoch) internal {
-        uint256 nextEpoch;
-        uint256 fillEpochs;
-        if (_includeCurrentEpoch) {
-            nextEpoch = vlCVX.epochCount() - 2;
-            fillEpochs = FILL_EPOCHS + 1;
-        } else {
-            nextEpoch = vlCVX.epochCount() - 1;
-            fillEpochs = FILL_EPOCHS;
-        }
+    function _syncUser(address _user, address _delegate, uint256 _startEpoch, uint256 _numEpochs) internal {
         uint256 endEpoch;
-        unchecked { endEpoch = nextEpoch + fillEpochs; }
+        unchecked { endEpoch = _startEpoch + _numEpochs; }
 
-        uint256 startEntry = nextEpoch >> 3;
+        uint256 startEntry = _startEpoch >> 3;
         uint256 endEntry = (endEpoch - 1) >> 3;
 
         for (uint256 entryIdx = startEntry; entryIdx <= endEntry;) {
@@ -147,7 +154,7 @@ contract Delegation {
                 entryEndEpoch = entryStartEpoch + EPOCHS_PER_ENTRY;
             }
 
-            uint256 loopStart = nextEpoch > entryStartEpoch ? nextEpoch : entryStartEpoch;
+            uint256 loopStart = _startEpoch > entryStartEpoch ? _startEpoch : entryStartEpoch;
             uint256 loopEnd = endEpoch < entryEndEpoch ? endEpoch : entryEndEpoch;
 
             for (uint256 epoch = loopStart; epoch < loopEnd;) {

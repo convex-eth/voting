@@ -698,7 +698,42 @@ contract DelegationTest is Test {
 
         delegation.sync(alice);
 
-        assertWeightMatches(current, delegateA, expected);
+        // Current epoch: alice's delegate is still address(0) (delegate starts next epoch),
+        // so delegateA gets nothing at current epoch. But alice's user weight is updated.
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 0);
+
+        // Future epochs: delegateA gets alice's weight
+        uint256 future = current + 1;
+        assertEq(delegation.balanceAtEpochOf(future, delegateA), expected);
+    }
+
+    function test_syncCurrentEpochUsesCorrectDelegate() public {
+        mockVlCVX.mockLock(alice, 1000 * WEIGHT_DIVISOR, 1000 * WEIGHT_DIVISOR);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegateA);
+
+        warpToNextEpoch();
+
+        // Now alice sets a NEW delegate (starts at next epoch)
+        vm.prank(alice);
+        delegation.setDelegate(delegateB);
+
+        // Current epoch delegate should still be delegateA
+        assertEq(delegation.getDelegateAtEpoch(alice, currentEpochIndex()), delegateA);
+
+        delegation.sync(alice);
+
+        // Current epoch: synced to delegateA
+        uint256 current = currentEpochIndex();
+        uint256 expected = mockVlCVX.balanceAtEpochOf(current, alice);
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), expected);
+        assertEq(delegation.balanceAtEpochOf(current, delegateB), 0);
+
+        // Future epochs: synced to delegateB
+        uint256 future = current + 1;
+        assertEq(delegation.balanceAtEpochOf(future, delegateB), expected);
+        assertEq(delegation.balanceAtEpochOf(future, delegateA), 0);
     }
 
     function test_syncDoubleCallReturnsEarly() public {
@@ -723,8 +758,13 @@ contract DelegationTest is Test {
         assertEq(snapWeight2, snapWeight1);
         assertEq(snapTs2, snapTs1);
 
-        uint256 oldExpected = 1000 * WEIGHT_DIVISOR;
-        assertWeightMatches(current, delegateA, oldExpected);
+        // delegateA is active at current epoch (same as future delegate), so gets synced
+        // Second sync returns early, so weight stays at first-sync value (1000)
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 1000 * WEIGHT_DIVISOR);
+
+        // Future epochs also stay at first-sync value
+        uint256 future = current + 1;
+        assertEq(delegation.balanceAtEpochOf(future, delegateA), 1000 * WEIGHT_DIVISOR);
     }
 
     function test_syncStoresSnapshot() public {
