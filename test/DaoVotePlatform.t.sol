@@ -865,6 +865,37 @@ contract DaoVotePlatformTest is Test {
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
+    function test_userBaseDiff_relockDelegateNotVoted() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Alice votes first — initBaseInfo subtracts bob's adjustedWeight by alice's delegation weight
+        _voteNo(alice);
+
+        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+
+        // Alice relocks mid-proposal
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+
+        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        assertGt(aliceBalAfter, aliceBalBefore);
+
+        // Alice re-votes — triggers userBaseDiff > 0
+        // Bob hasn't voted (voteStatus == 0), so growth goes directly to bob.adjustedWeight
+        _voteNo(alice);
+
+        // Bob's pending should be 0 (direct subtraction, not pending)
+        int256 bobPending = dao.pendingWeightAdjustment(pid, bob);
+        assertEq(bobPending, 0);
+
+        // Bob votes — his adjustedWeight already reflects alice's growth subtraction
+        _voteYes(bob);
+
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
     // ========== No double-counting: total weight never exceeds sum of all vlCVX ==========
 
     function test_noDoubleCounting_complexChain() public {

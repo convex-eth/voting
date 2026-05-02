@@ -162,7 +162,7 @@ contract GaugeVotePlatform is Ownable2Step {
             UserInfo storage del = userInfo[_proposalId][delegate];
 
             if (del.voteStatus == 0) {
-                del.adjustedWeight -= int96(int256(baseWeight));
+                del.adjustedWeight -= int96(int256(delegation.userWeightAtEpochOf(epoch, _account)));
             } else {
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
                 (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, epoch);
@@ -235,8 +235,14 @@ contract GaugeVotePlatform is Ownable2Step {
             if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
                 delegation.sync(_account);
                 
-                pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(userBaseDiff));
-                emit PendingWeightAdjustment(proposalId, user.delegate, -int256(userBaseDiff));
+                uint256 truncatedDiff = ((userBaseDiff / WEIGHT_DIVISOR) * WEIGHT_DIVISOR);
+                UserInfo storage del = userInfo[proposalId][user.delegate];
+                if (del.voteStatus > 0) {
+                    pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(truncatedDiff));
+                    emit PendingWeightAdjustment(proposalId, user.delegate, -int256(truncatedDiff));
+                } else {
+                    del.adjustedWeight -= int96(int256(truncatedDiff));
+                }
             }
 
             int96 pend = pendingWeightAdjustment[proposalId][_account];

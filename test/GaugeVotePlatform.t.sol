@@ -1082,6 +1082,40 @@ contract GaugeVotePlatformTest is Test {
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
+    // ========== userBaseDiff: relock with delegate who hasn't voted yet ==========
+
+    function test_userBaseDiff_relockDelegateNotVoted() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        // Alice votes first — initBaseInfo subtracts bob's adjustedWeight by alice's delegation weight
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+
+        // Alice relocks mid-proposal
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+
+        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        assertGt(aliceBalAfter, aliceBalBefore);
+
+        // Alice re-votes — triggers userBaseDiff > 0
+        // Bob hasn't voted (voteStatus == 0), so growth goes directly to bob.adjustedWeight
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        // Bob's pending should be 0 (direct subtraction, not pending)
+        int256 bobPending = platform.pendingWeightAdjustment(pid, bob);
+        assertEq(bobPending, 0);
+
+        // Bob votes — his adjustedWeight already reflects alice's growth subtraction
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        // Totals should be correct
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
     // ========== No double-counting: total weight never exceeds sum of all vlCVX ==========
 
     function test_noDoubleCounting_complexChain() public {
