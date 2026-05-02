@@ -1,6 +1,6 @@
 # Audit Report
 
-Date: 2026-05-01
+Date: 2026-05-02
 
 This report summarizes confirmed findings from the security and correctness review passes. Findings remain sorted by severity, and each finding includes its severity and fix commit links. All listed findings are fixed in the current worktree.
 
@@ -12,7 +12,7 @@ Original-intent review was performed against base commit [`e267243`](https://git
 |---|---:|
 | Critical | 0 |
 | High | 6 |
-| Medium | 6 |
+| Medium | 8 |
 | Low | 3 |
 | Informational | 0 |
 
@@ -427,6 +427,65 @@ Tests:
 - `invariant_daoVoteTotalsMatchEffectiveWeights`
 - `invariant_gaugeVoteTotalsMatchEffectiveWeights`
 
+<a id="adm-001"></a>
+
+## ADM-001 - ConvexCore could be configured into an unrecoverable zero-operator state
+
+Status: Fixed.
+Severity: Medium.
+Fix commit: [`3a936be`](https://github.com/wavey0x/voting/commit/3a936be554ccad9c4512e9f10fffed408149ef6c).
+
+Affected contracts:
+- [`src/ConvexCore.sol`](src/ConvexCore.sol)
+
+Code refs: `src/ConvexCore.sol::constructor`, `src/ConvexCore.sol::setOperator`, `src/ConvexCore.sol::execute`.
+
+Original-intent check: [`src/ConvexCore.sol`](src/ConvexCore.sol) is the root admin executor for owned registries, platforms, proposers, and DAO executors. A permanently operatorless core cannot perform the documented production admin role, so zero-operator construction or last-operator removal is not a useful trust-minimization mode.
+
+Finding: `ConvexCore` accepted an empty initial operator set, accepted `address(0)` as an operator, and allowed the final active operator to remove itself. Any of those states can leave the admin plane unable to call `execute()` or recover ownership-controlled configuration.
+
+Impact: A deployment or operational mistake could permanently lock governance out of registry updates, platform operator updates, proposer configuration, DAO executor guardian/quorum changes, and ownership handoff actions that depend on `ConvexCore.execute()`.
+
+Resolution: `ConvexCore` now tracks `operatorCount`, rejects zero-address operators, rejects empty construction, counts duplicate initial operators only once, and reverts with `LastOperator` when an operation would remove the final active operator.
+
+Tests:
+- `test_constructorRejectsEmptyOperatorSet`
+- `test_constructorRejectsZeroOperator`
+- `test_constructorInitializesUniqueNonZeroOperators`
+- `test_cannotRemoveLastOperator`
+- `test_operatorCanAddAndRemoveOperatorsWithoutLockout`
+- `test_cannotSetZeroOperator`
+
+<a id="adm-002"></a>
+
+## ADM-002 - Deployment left the transient deployer as a root ConvexCore operator
+
+Status: Fixed.
+Severity: Medium.
+Fix commit: [`bf135fb`](https://github.com/wavey0x/voting/commit/bf135fb6b97c865736646b491caff83a5d3acf96).
+
+Affected files:
+- [`script/Deploy.s.sol`](script/Deploy.s.sol)
+- [`src/ConvexCore.sol`](src/ConvexCore.sol)
+
+Code refs: `script/Deploy.s.sol::run`, `src/ConvexCore.sol::constructor`, `src/ConvexCore.sol::setOperator`, `src/ConvexCore.sol::execute`.
+
+Original-intent check: The deploy script grants `MSIG` platform operator and executor guardian roles, registers `OWNER -> ConvexCore`, and uses the deployer mainly so the script can perform setup calls. Keeping the deployer as a root operator after setup conflicts with that multisig-centered handoff.
+
+Finding: `Deploy.run()` initialized `ConvexCore` with both `deployer` and `MSIG`, then finished without removing the transient deployer. The deployer EOA retained the same root arbitrary-call authority as the multisig.
+
+Impact: After production deployment, a compromised or unintended deployer key could mutate registry entries, platform operators, proposer operators/configuration, executor guardians/quorum, and any other owned component reachable through `ConvexCore.execute()`.
+
+Resolution: The deploy script now removes `deployer` as a `ConvexCore` operator at the end of setup when `deployer != MSIG`. The preflight test asserts the final root operator count is one and that `MSIG` is the remaining core operator.
+
+Tests:
+- `test_deployScriptWiresProductionGraphOnMainnetFork`
+- `test_coreCanChainProductionAdminActions`
+- `test_executeReturnsDataAndEmitsObservableSuccessEvent`
+- `test_executeBubblesRevertReason`
+- `test_executeBubblesCustomError`
+- `test_executeRevertsWithFallbackMessageWhenNoReturnData`
+
 <a id="acg-002"></a>
 
 ## ACG-002 - Proposer `proposalLength` setters accepted values outside platform bounds
@@ -524,6 +583,8 @@ Invariants established:
 - `invariant_pendingAdjustmentsClearForSuccessfulVoters`: successful voters do not retain stale pending adjustments.
 - `invariant_delegationChangesAreFutureEpochOnly`: delegate changes do not mutate the already-active current proposal epoch.
 - `invariant_surrogatesCannotOverrideDirectVotes`: surrogates cannot overwrite a user's direct vote.
+- `testFuzz_generatedBatchesPreserveExecutorAccounting`: Curve gauge executor batches mixing positive and zero-weight gauges keep submitted gauges unique, keep submitted positive weight at or below 10000 bps, and become complete only after every positive proposal gauge has been submitted.
+- `testFuzz_duplicateGeneratedBatchRevertsWithoutStateCorruption`: duplicate positive or zero-weight gauges in a generated batch revert without leaving submitted-gauge, submitted-count, submitted-weight, or delegate-call state behind.
 
 Invariant failures fixed:
 - DAO/gauge vote totals could exceed known supply after relock, external delegation sync, delegate vote, and delegatee re-vote ordering. Fixed as [`LDA-001`](#lda-001).
@@ -533,9 +594,11 @@ Invariant failures fixed:
 Harness-only adjustment:
 - Surrogate vote calls that reverted with `NoWeight` after valid direct-vote accounting were treated as allowed. The invariant now checks the security property that surrogates cannot override direct votes, without requiring every zero-weight surrogate attempt to succeed.
 
-Curve gauge voting scope:
+Curve gauge voting and execution scope:
 - The campaign did cover [`src/GaugeVotePlatform.sol`](src/GaugeVotePlatform.sol) using [`src/CurveGaugeRegistry.sol`](src/CurveGaugeRegistry.sol) and mock Curve gauges/controller behavior.
-- It did not fuzz real mainnet Curve Gauge Controller state or the [`src/CurveGaugeExecutor.sol`](src/CurveGaugeExecutor.sol) batching path on a fork.
+- The Curve execution campaign covered [`src/CurveGaugeRegistry.sol`](src/CurveGaugeRegistry.sol) and [`src/CurveGaugeExecutor.sol`](src/CurveGaugeExecutor.sol) against pinned mainnet Curve Gauge Controller state at block `24875982`, using the decoded Convex gauge vote transaction `0x133586a9cc8ea60a6e229986d20d804351bceac6b5816cf833d01d92311908de`.
+- Fork coverage established real weighted gauges, a legacy weighted gauge without `is_killed()`, a killed weighted gauge, a zero-controller-weight gauge, explicit zero-weight clearing, partial batch execution, repeated-batch rejection, rounding/padding to 10000 bps, latest-proposal-only execution, epoch expiry, and read-only controller vote-lock state for the historical vote.
+- The fork campaign does not impersonate Convex's Curve voter to submit a changed vote into the live Curve Gauge Controller. External submission effects remain tested through the vote-delegate boundary, while controller state and vote-lock assumptions are checked read-only against the pinned fork.
 
 ## Review Evidence
 
@@ -548,12 +611,15 @@ Targeted suites run during the finding passes:
 - `MAINNET_RPC_URL=https://ethereum-rpc.publicnode.com forge test --match-contract MainnetIntegrationTest -vv`
 - `MAINNET_RPC_URL=https://guest:guest@eth.wavey.info forge test --match-contract DeployPreflightTest -vv`
 - `forge test --match-contract LazyDelegationInvariantTest -vv`
+- `forge test --match-contract CurveGaugeExecutorFuzzTest -vv`
+- `MAINNET_RPC_URL=https://guest:guest@eth.wavey.info forge test --match-contract CurveGaugeExecutionForkTest -vv`
+- `forge test --match-contract ConvexCoreTest -vv`
 - `forge test --match-test test_revertIfEpochExpired`
 - `forge script script/Deploy.s.sol:Deploy --rpc-url https://ethereum-rpc.publicnode.com --fork-block-number 25002097 -vv`
 - `forge script script/Deploy.s.sol:Deploy --rpc-url https://guest:guest@eth.wavey.info --fork-block-number 25002097 -vv`
 
 Final full-suite verification:
-- `MAINNET_RPC_URL=https://guest:guest@eth.wavey.info forge test -vv` passed with 353 tests.
+- `MAINNET_RPC_URL=https://guest:guest@eth.wavey.info forge test -vv` passed with 372 tests.
 
 ## Scope Notes
 
@@ -563,9 +629,11 @@ Reviewed surfaces:
 - [`src/DaoVotePlatform.sol`](src/DaoVotePlatform.sol) proposal lifecycle, finalization window, force-end behavior, and finished/finalized semantics.
 - [`src/CurveGaugeExecutor.sol`](src/CurveGaugeExecutor.sol) and [`src/FxGaugeExecutor.sol`](src/FxGaugeExecutor.sol) batching, duplicate submission handling, latest-proposal restrictions, epoch expiry, and rounding/padding.
 - [`src/CurveVoteExecutor.sol`](src/CurveVoteExecutor.sol) and [`src/ResupplyVoteExecutor.sol`](src/ResupplyVoteExecutor.sol) guardian execution, permissionless execution, quorum enforcement, and duplicate execution guards.
+- [`src/ConvexCore.sol`](src/ConvexCore.sol) operator bootstrap, zero-operator lockout prevention, arbitrary-call revert bubbling, success event observability, production ownership/control reachability, and deployment handoff assumptions.
 - [`src/CurveDaoProposer.sol`](src/CurveDaoProposer.sol), [`src/ResupplyDaoProposer.sol`](src/ResupplyDaoProposer.sol), [`src/GenericDaoProposer.sol`](src/GenericDaoProposer.sol), and [`src/GaugeProposer.sol`](src/GaugeProposer.sol) proposer gates, duplicate prevention, owner/operator boundaries, and proposal length bounds.
 - [`src/CurveGaugeRegistry.sol`](src/CurveGaugeRegistry.sol), [`src/FxGaugeRegistry.sol`](src/FxGaugeRegistry.sol), and [`src/VotingRegistry.sol`](src/VotingRegistry.sol) registry permission models.
 - Lazy-delegation invariant/fuzz coverage for DAO voting and gauge voting with [`src/CurveGaugeRegistry.sol`](src/CurveGaugeRegistry.sol) and mock Curve gauges/controller behavior.
+- Curve gauge execution fork/fuzz coverage with real pinned Curve Gauge Controller state, historical Convex gauge vote weights, zero-weight clears, duplicate/repeated batch protection, partial completion accounting, rounding/padding, latest-proposal restrictions, epoch expiry, and read-only controller vote-lock checks.
 - Mainnet adapter assumptions for vlCVX, Curve DAO voters, Curve/F(x) gauge controllers, the Convex vote delegate extension, the F(x) gauge voter, Resupply voting, and the Resupply PermaStaker at pinned block `25002097`.
 - Deployment script registration type ids and executor wiring.
 - Deployment preflight coverage for registry entries, ownership, operators, guardians, delegation dependencies, gauge registries, proposers, executors, and platform dependencies.
