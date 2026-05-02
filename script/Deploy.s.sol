@@ -157,8 +157,8 @@ contract Deploy is Script {
         console.log("Set MSIG as guardian on CurveVoteExecutor");
 
         CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor(
-            VOTE_DELEGATE,
-            address(curveGaugeVoting)
+            address(curveGaugeVoting),
+            VOTE_DELEGATE
         );
         console.log("CurveGaugeExecutor:", address(curveGaugeExecutor));
 
@@ -346,21 +346,7 @@ contract Deploy is Script {
         core.execute(address(convexDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(convexDaoProposer), true));
         console.log("Set ConvexDaoProposer as operator on ConvexDaoVoting");
 
-        // ── 25. Deploy ResupplyVoteExecutor ──
-        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor(
-            address(core),
-            address(fraxDaoVoting),
-            DEFAULT_QUORUM
-        );
-        console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
-
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_EXECUTOR, address(resupplyVoteExecutor)));
-        console.log("Registered RESUPPLY -> DAO_EXECUTOR");
-
-        _setGuardian(address(resupplyVoteExecutor), MSIG);
-        console.log("Set MSIG as guardian on ResupplyVoteExecutor");
-
-        // ── 26. Deploy Resupply DaoVoting ──
+        // ── 25. Deploy Resupply DaoVoting ──
         DaoVotePlatform resupplyDaoVoting = new DaoVotePlatform(
             address(core),
             VLCVX,
@@ -374,6 +360,20 @@ contract Deploy is Script {
 
         _setOperator(address(resupplyDaoVoting), MSIG);
         console.log("Set MSIG as operator on ResupplyDaoVoting");
+
+        // ── 26. Deploy ResupplyVoteExecutor ──
+        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor(
+            address(core),
+            address(resupplyDaoVoting),
+            DEFAULT_QUORUM
+        );
+        console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_EXECUTOR, address(resupplyVoteExecutor)));
+        console.log("Registered RESUPPLY -> DAO_EXECUTOR");
+
+        _setGuardian(address(resupplyVoteExecutor), MSIG);
+        console.log("Set MSIG as guardian on ResupplyVoteExecutor");
 
         // ── 27. Deploy ResupplyDaoProposer ──
         ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer(
