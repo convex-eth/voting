@@ -76,8 +76,9 @@ contract DeployPreflightTest is Test {
         ConvexCore core = ConvexCore(d.core);
         VotingRegistry registry = VotingRegistry(d.registry);
 
-        assertTrue(core.operators(d.deployer), "deployer core operator");
+        assertFalse(core.operators(d.deployer), "deployer core operator removed");
         assertTrue(core.operators(MSIG), "msig core operator");
+        assertEq(core.operatorCount(), 1, "core operator count");
         assertEq(registry.owner(), d.core, "registry owner");
 
         assertEq(registry.getAddress("DELEGATION", registry.VOTE_DAO()), d.daoDelegation, "dao delegation registry");

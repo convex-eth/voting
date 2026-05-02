@@ -512,6 +512,11 @@ contract Deploy is Script {
         _setOperator(address(resupplyDaoVoting), address(resupplyDaoProposer));
         console.log("Set ResupplyDaoProposer as operator on ResupplyDaoVoting");
 
+        if (deployer != MSIG) {
+            core.setOperator(deployer, false);
+            console.log("Removed deployer as ConvexCore operator");
+        }
+
         vm.stopBroadcast();
 
         deployment = Deployment({
