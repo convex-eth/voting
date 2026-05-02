@@ -268,7 +268,7 @@ contract GaugeVotePlatform is Ownable2Step {
             votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint16(_weights[i])}));
             totalweight += _weights[i];
         }
-        if (totalweight > max_weight) revert MaxWeight();
+        if (totalweight != max_weight) revert MaxWeight();
 
         for (uint256 i = 0; i < _weights.length; i++) {
             _changeGaugeTotal(proposalId, _gauges[i], int256(_weights[i]) * userWeight / int256(max_weight));

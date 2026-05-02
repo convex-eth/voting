@@ -214,7 +214,7 @@ contract DaoVotePlatform is Ownable2Step {
         Proposal storage prop = proposals[proposalId];
         if (block.timestamp < prop.startTime) revert NotStarted();
         if (block.timestamp > prop.endTime) revert Ended();
-        if (_yesWeight + _noWeight > max_weight) revert MaxWeight();
+        if (_yesWeight + _noWeight != max_weight) revert MaxWeight();
 
         _initBaseInfo(_account, proposalId);
 
