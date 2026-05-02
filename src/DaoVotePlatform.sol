@@ -291,6 +291,7 @@ contract DaoVotePlatform is Ownable2Step {
         }
 
         if (_endTime <= _startTime) revert BadTime();
+        if (_endTime <= block.timestamp) revert BadTime();
         if (_endTime - _startTime < 3 days) revert BadTime();
         if (_endTime - _startTime > 6 days) revert BadTime();
 
