@@ -79,12 +79,12 @@ contract CurveGaugeExecutorTest is Test {
     }
 
     function _warpToNextEpoch() internal {
-        uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
+        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
         vm.warp(currentEpoch + WEEK + 1);
     }
 
     function _createProposal() internal returns (uint256) {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -168,11 +168,11 @@ contract CurveGaugeExecutorTest is Test {
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
         _finalizeProposal(pid0);
 
-        vm.warp(block.timestamp + 1 days);
+        vm.warp(vm.getBlockTimestamp() + 1 days);
         _lockAndDelegate(bob, 500, address(0));
         _warpToNextEpoch();
 
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);

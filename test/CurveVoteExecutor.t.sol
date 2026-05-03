@@ -61,7 +61,7 @@ contract CurveVoteExecutorTest is Test {
     }
 
     function _createProposal(DaoVotePlatform.VoteType vt, uint256 proposalId) internal returns (uint256) {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, vt, proposalId);

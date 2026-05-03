@@ -48,8 +48,8 @@ contract GenericDaoProposerTest is Test {
         proposer.propose(1, 0);
 
         (uint256 s, uint256 e,, uint8 vt, uint256 vId) = daoVotePlatform.proposals(pid);
-        assertEq(s, block.timestamp);
-        assertEq(e, block.timestamp + 3 days);
+        assertEq(s, vm.getBlockTimestamp());
+        assertEq(e, vm.getBlockTimestamp() + 3 days);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
         assertEq(vId, 1);
     }

@@ -88,7 +88,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_proposeVote() public {
-        uint256 createdAt = block.timestamp;
+        uint256 createdAt = vm.getBlockTimestamp();
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 1), mockData);
 
@@ -104,7 +104,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_cannotProposeSameVoteIdTwice() public {
-        uint256 createdAt = block.timestamp;
+        uint256 createdAt = vm.getBlockTimestamp();
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 1), mockData);
 
@@ -115,7 +115,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_cannotProposeProcessedVote() public {
-        uint256 createdAt = block.timestamp;
+        uint256 createdAt = vm.getBlockTimestamp();
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), true, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 2), mockData);
 
@@ -124,7 +124,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_cannotProposeAfter3Days() public {
-        uint256 createdAt = block.timestamp - 4 days;
+        uint256 createdAt = vm.getBlockTimestamp() - 4 days;
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 3), mockData);
 
@@ -133,7 +133,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_canProposeExactlyAt3Days() public {
-        uint256 createdAt = block.timestamp - 3 days;
+        uint256 createdAt = vm.getBlockTimestamp() - 3 days + 1;
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 4), mockData);
 

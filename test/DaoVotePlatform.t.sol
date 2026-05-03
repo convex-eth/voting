@@ -52,12 +52,12 @@ contract DaoVotePlatformTest is Test {
     }
 
     function _warpToNextEpoch() internal {
-        uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
+        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
         vm.warp(currentEpoch + WEEK + 1);
     }
 
     function _createProposal() internal returns (uint256) {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
@@ -95,7 +95,7 @@ contract DaoVotePlatformTest is Test {
     // ========== Proposal Tests ==========
 
     function test_createProposal() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership, 42);
@@ -108,7 +108,7 @@ contract DaoVotePlatformTest is Test {
     }
 
     function test_createProposalParameterType() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 99);
@@ -119,14 +119,14 @@ contract DaoVotePlatformTest is Test {
     }
 
     function test_cannotCreateProposalTooShort() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
         dao.createProposal(startTime, startTime + 2 days, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateProposalTooLong() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
         dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter, 1);
@@ -136,7 +136,7 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.PrevNotEnded.selector);
-        dao.createProposal(block.timestamp + 5 days, block.timestamp + 9 days, DaoVotePlatform.VoteType.Parameter, 1);
+        dao.createProposal(vm.getBlockTimestamp() + 5 days, vm.getBlockTimestamp() + 9 days, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_forceEndProposal() public {
@@ -270,7 +270,7 @@ contract DaoVotePlatformTest is Test {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();
 
-        uint256 startTime = block.timestamp + 2 days;
+        uint256 startTime = vm.getBlockTimestamp() + 2 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership, 1);
@@ -607,7 +607,7 @@ contract DaoVotePlatformTest is Test {
     // ========== Operator ==========
 
     function test_onlyOperatorCanCreateProposal() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.NotOperator.selector);

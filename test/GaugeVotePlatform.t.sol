@@ -78,12 +78,12 @@ contract GaugeVotePlatformTest is Test {
     }
 
     function _warpToNextEpoch() internal {
-        uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
+        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
         vm.warp(currentEpoch + WEEK + 1);
     }
 
     function _createProposal() internal returns (uint256) {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -127,7 +127,7 @@ contract GaugeVotePlatformTest is Test {
     // ========== Proposal Tests ==========
 
     function test_createProposal() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -138,21 +138,21 @@ contract GaugeVotePlatformTest is Test {
     }
 
     function test_cannotCreateProposalTooShort() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 2 days);
     }
 
     function test_cannotCreateProposalTooLong() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 7 days);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -176,7 +176,7 @@ contract GaugeVotePlatformTest is Test {
 
     function test_forceEndProposalBeforeStart() public {
         _warpToNextEpoch();
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -216,7 +216,7 @@ contract GaugeVotePlatformTest is Test {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();
 
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime, endTime);
@@ -578,7 +578,7 @@ contract GaugeVotePlatformTest is Test {
     }
 
     function test_onlyOperatorCanCreateProposal() public {
-        uint256 startTime = block.timestamp + 1 days;
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(makeAddr("notOp"));
         vm.expectRevert(GaugeVotePlatform.NotOperator.selector);
@@ -615,7 +615,7 @@ contract GaugeVotePlatformTest is Test {
         (, uint256 endTime1,) = platform.proposals(pid1);
         vm.warp(endTime1 + 10 minutes + 1);
 
-        uint256 startTime2 = block.timestamp + 1 days;
+        uint256 startTime2 = vm.getBlockTimestamp() + 1 days;
         uint256 endTime2 = startTime2 + 4 days;
         vm.prank(operator);
         platform.createProposal(startTime2, endTime2);
@@ -764,7 +764,7 @@ contract GaugeVotePlatformTest is Test {
         (, uint256 endTime1,) = platform.proposals(pid1);
         vm.warp(endTime1 + 10 minutes + 1);
 
-        uint256 startTime2 = block.timestamp + 1 days;
+        uint256 startTime2 = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         platform.createProposal(startTime2, startTime2 + 4 days);
         vm.warp(startTime2);
