@@ -26,13 +26,72 @@ contract CurveGaugeRegistryTest is Test {
         gauge4 = new MockCurveGauge();
         gauge5 = new MockCurveGauge();
 
-        registry = new CurveGaugeRegistry();
+        address[] memory initial = new address[](0);
+        registry = new CurveGaugeRegistry(address(this), initial);
 
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge2), 2000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge3), 3000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge4), 0);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge5), 500);
+    }
+
+    function test_initialGaugesRegisteredWithoutValidation() public {
+        address[] memory initial = new address[](3);
+        initial[0] = address(gauge1);
+        initial[1] = address(gauge2);
+        initial[2] = address(gauge5);
+
+        address[] memory empty = new address[](0);
+        CurveGaugeRegistry reg = new CurveGaugeRegistry(address(this), initial);
+
+        assertEq(reg.gaugeLength(), 3);
+        assertTrue(reg.isRegisteredGauge(address(gauge1)));
+        assertTrue(reg.isRegisteredGauge(address(gauge2)));
+        assertTrue(reg.isRegisteredGauge(address(gauge5)));
+        assertFalse(reg.isRegisteredGauge(address(gauge3)));
+    }
+
+    function test_forceRemove() public {
+        registry.setGauge(address(gauge1));
+        assertEq(registry.gaugeLength(), 1);
+
+        registry.forceRemove(address(gauge1));
+
+        assertEq(registry.gaugeLength(), 0);
+        assertFalse(registry.isRegisteredGauge(address(gauge1)));
+        assertTrue(registry.forceRemoved(address(gauge1)));
+    }
+
+    function test_forceRemoveNotActive() public {
+        assertFalse(registry.isRegisteredGauge(address(gauge1)));
+
+        registry.forceRemove(address(gauge1));
+
+        assertFalse(registry.isRegisteredGauge(address(gauge1)));
+        assertTrue(registry.forceRemoved(address(gauge1)));
+    }
+
+    function test_reinstateForceRemoved() public {
+        registry.setGauge(address(gauge1));
+        registry.forceRemove(address(gauge1));
+        assertTrue(registry.forceRemoved(address(gauge1)));
+
+        registry.reinstate(address(gauge1));
+
+        assertFalse(registry.forceRemoved(address(gauge1)));
+        assertFalse(registry.isRegisteredGauge(address(gauge1)));
+    }
+
+    function test_setGaugeCannotReAddForceRemoved() public {
+        registry.setGauge(address(gauge1));
+        registry.forceRemove(address(gauge1));
+
+        MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge1), 1000);
+        registry.setGauge(address(gauge1));
+
+        assertFalse(registry.isRegisteredGauge(address(gauge1)));
+        assertEq(registry.gaugeLength(), 0);
     }
 
     function test_addValidGauge() public {

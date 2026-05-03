@@ -39,7 +39,7 @@ contract GasProfile is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
 
-        gaugeRegistry = new CurveGaugeRegistry();
+        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
         surrogateRegistry = new SurrogateRegistry();
 
         platform = new GaugeVotePlatform(

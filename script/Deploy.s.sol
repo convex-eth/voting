@@ -104,7 +104,8 @@ contract Deploy is Script {
         console.log("Registered OWNER");
 
         // ── 6. Deploy CurveGaugeRegistry ──
-        CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry();
+        address[] memory curveInitialGauges = new address[](0);
+        CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry(address(core), curveInitialGauges);
         console.log("CurveGaugeRegistry:", address(curveGaugeRegistry));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.GAUGE_REGISTRY, address(curveGaugeRegistry)));
@@ -193,7 +194,8 @@ contract Deploy is Script {
         console.log("Set GaugeProposer as operator on CurveGaugeVoting");
 
         // ── 12. Deploy F(x) GaugeRegistry ──
-        FxGaugeRegistry fxGaugeRegistry = new FxGaugeRegistry(address(core));
+        address[] memory fxInitialGauges = new address[](0);
+        FxGaugeRegistry fxGaugeRegistry = new FxGaugeRegistry(address(core), fxInitialGauges);
         console.log("FxGaugeRegistry:", address(fxGaugeRegistry));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.GAUGE_REGISTRY, address(fxGaugeRegistry)));

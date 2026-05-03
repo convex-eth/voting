@@ -39,7 +39,69 @@ contract FxGaugeRegistryTest is Test {
         vm.etch(GAUGE_CONTROLLER, address(mockController).code);
         vm.etch(gauge, address(mockGauge).code);
 
-        registry = new FxGaugeRegistry(owner);
+        address[] memory initial = new address[](0);
+        registry = new FxGaugeRegistry(owner, initial);
+    }
+
+    function test_initialGaugesRegisteredWithoutValidation() public {
+        address[] memory empty = new address[](0);
+        address[] memory initial = new address[](2);
+        initial[0] = gauge;
+        initial[1] = makeAddr("fakeGauge");
+
+        FxGaugeRegistry reg = new FxGaugeRegistry(owner, initial);
+
+        assertEq(reg.gaugeLength(), 2);
+        assertTrue(reg.isRegisteredGauge(gauge));
+        assertTrue(reg.isRegisteredGauge(makeAddr("fakeGauge")));
+        assertFalse(reg.isRegisteredGauge(makeAddr("nonExistent")));
+    }
+
+    function test_forceRemove() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+        registry.setGauge(gauge);
+        assertEq(registry.gaugeLength(), 1);
+
+        registry.forceRemove(gauge);
+
+        assertEq(registry.gaugeLength(), 0);
+        assertFalse(registry.isRegisteredGauge(gauge));
+        assertTrue(registry.forceRemoved(gauge));
+    }
+
+    function test_forceRemoveNotActive() public {
+        assertFalse(registry.isRegisteredGauge(gauge));
+
+        registry.forceRemove(gauge);
+
+        assertFalse(registry.isRegisteredGauge(gauge));
+        assertTrue(registry.forceRemoved(gauge));
+    }
+
+    function test_setGaugeCannotReAddForceRemoved() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+        registry.setGauge(gauge);
+        registry.forceRemove(gauge);
+
+        registry.setGauge(gauge);
+
+        assertFalse(registry.isRegisteredGauge(gauge));
+        assertEq(registry.gaugeLength(), 0);
+    }
+
+    function test_reinstateForceRemoved() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+        registry.setGauge(gauge);
+        registry.forceRemove(gauge);
+        assertTrue(registry.forceRemoved(gauge));
+
+        registry.reinstate(gauge);
+
+        assertFalse(registry.forceRemoved(gauge));
+        assertFalse(registry.isRegisteredGauge(gauge));
     }
 
     function test_validGauge_type0_active() public {

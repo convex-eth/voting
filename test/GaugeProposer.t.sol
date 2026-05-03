@@ -29,7 +29,7 @@ contract GaugeProposerTest is Test {
 
         delegation = new Delegation(address(mockVlCVX));
         surrogateRegistry = new SurrogateRegistry();
-        gaugeRegistry = new CurveGaugeRegistry();
+        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
 
         gaugeVotePlatform = new GaugeVotePlatform(
             owner,
