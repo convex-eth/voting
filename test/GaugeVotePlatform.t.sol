@@ -141,7 +141,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
-        platform.createProposal(startTime, startTime + 2 days);
+        platform.createProposal(startTime, startTime + 12 hours);
     }
 
     function test_cannotCreateProposalTooLong() public {

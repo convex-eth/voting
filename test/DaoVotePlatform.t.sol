@@ -122,7 +122,7 @@ contract DaoVotePlatformTest is Test {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
-        dao.createProposal(startTime, startTime + 2 days, DaoVotePlatform.VoteType.Parameter, 1);
+        dao.createProposal(startTime, startTime + 12 hours, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateProposalTooLong() public {

@@ -28,6 +28,8 @@ contract DaoVotePlatform is Ownable2Step {
     uint256 public constant epochDuration = 86400 * 7;
     uint256 public constant finalizationTime = 12 hours;
     uint256 public constant max_weight = 10000;
+    uint256 public constant MIN_PROPOSAL_DURATION = 1 days;
+    uint256 public constant MAX_PROPOSAL_DURATION = 6 days;
     uint256 private constant WEIGHT_DIVISOR = 1e17;
 
     enum VoteStatus {
@@ -292,8 +294,8 @@ contract DaoVotePlatform is Ownable2Step {
 
         if (_endTime <= _startTime) revert BadTime();
         if (_endTime <= block.timestamp) revert BadTime();
-        if (_endTime - _startTime < 3 days) revert BadTime();
-        if (_endTime - _startTime > 6 days) revert BadTime();
+        if (_endTime - _startTime < MIN_PROPOSAL_DURATION) revert BadTime();
+        if (_endTime - _startTime > MAX_PROPOSAL_DURATION) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;

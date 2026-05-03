@@ -114,14 +114,14 @@ contract GaugeProposerTest is Test {
     function test_setProposalLength() public {
         assertEq(proposer.proposalLength(), 5 days);
 
-        proposer.setProposalLength(7 days);
-        assertEq(proposer.proposalLength(), 7 days);
+        proposer.setProposalLength(5 days);
+        assertEq(proposer.proposalLength(), 5 days);
     }
 
     function test_onlyOwnerCanSetProposalLength() public {
         vm.expectRevert();
         vm.prank(makeAddr("notOwner"));
-        proposer.setProposalLength(7 days);
+        proposer.setProposalLength(5 days);
     }
 
     function test_initialLastEpochUsed() public {

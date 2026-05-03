@@ -35,6 +35,8 @@ contract ResupplyDaoProposer is Ownable2Step {
     }
 
     function setProposalLength(uint256 _proposalLength) external onlyOwner {
+        require(_proposalLength >= daoVotePlatform.MIN_PROPOSAL_DURATION(), "Below minimum");
+        require(_proposalLength <= daoVotePlatform.MAX_PROPOSAL_DURATION(), "Above maximum");
         proposalLength = _proposalLength;
         emit ProposalLengthSet(_proposalLength);
     }

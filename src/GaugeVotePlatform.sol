@@ -71,6 +71,8 @@ contract GaugeVotePlatform is Ownable2Step {
     Proposal[] public proposals;
     mapping(uint256 => mapping(address => GaugeVote[])) internal votes;
     uint256 public constant max_weight = 10000;
+    uint256 public constant MIN_PROPOSAL_DURATION = 1 days;
+    uint256 public constant MAX_PROPOSAL_DURATION = 6 days;
     uint256 private constant WEIGHT_DIVISOR = 1e17;
 
     mapping(address => bool) public equalizerAccounts;
@@ -348,8 +350,8 @@ contract GaugeVotePlatform is Ownable2Step {
 
         if (_endTime <= _startTime) revert BadTime();
         if (_endTime <= block.timestamp) revert BadTime();
-        if (_endTime - _startTime < 3 days) revert BadTime();
-        if (_endTime - _startTime > 6 days) revert BadTime();
+        if (_endTime - _startTime < MIN_PROPOSAL_DURATION) revert BadTime();
+        if (_endTime - _startTime > MAX_PROPOSAL_DURATION) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;
