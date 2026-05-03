@@ -11,6 +11,7 @@ contract CurveVoteExecutor is Ownable2Step {
     error NotFinished();
     error AlreadyExecuted();
     error QuorumNotMet();
+    error ZeroSupply();
 
     uint256 public constant WEIGHT_BPS = 10000;
 
@@ -40,10 +41,10 @@ contract CurveVoteExecutor is Ownable2Step {
         uint256 yesVotes = votePlatform.getYes(_proposalId);
         uint256 totalVotes = yesVotes + votePlatform.getNo(_proposalId);
 
-        if (quorumBps > 0) {
-            uint256 totalSupply = IvlCVX(votePlatform.vlCVX()).totalSupplyAtEpoch(epoch);
-            if (totalSupply > 0 && totalVotes * WEIGHT_BPS / totalSupply < quorumBps) revert QuorumNotMet();
-        }
+        uint256 totalSupply = IvlCVX(votePlatform.vlCVX()).totalSupplyAtEpoch(epoch);
+        if (totalSupply == 0) revert ZeroSupply();
+
+        if (quorumBps > 0 && totalVotes * WEIGHT_BPS / totalSupply < quorumBps) revert QuorumNotMet();
 
         uint256 yay = totalVotes > 0 ? yesVotes * WEIGHT_BPS / totalVotes : 0;
         uint256 nay = WEIGHT_BPS - yay;
