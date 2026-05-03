@@ -3,6 +3,8 @@ pragma solidity ^0.8.13;
 
 contract ConvexCore {
     mapping(address => bool) public operators;
+    mapping(address => uint256) private _operatorIndex;
+    address[] public operatorList;
 
     event OperatorSet(address indexed operator, bool active);
     event Executed(address indexed target, bytes data, bool success, bytes returnData);
@@ -15,8 +17,14 @@ contract ConvexCore {
     constructor(address[] memory _initialOperators) {
         for (uint256 i = 0; i < _initialOperators.length; i++) {
             operators[_initialOperators[i]] = true;
+            _operatorIndex[_initialOperators[i]] = operatorList.length + 1;
+            operatorList.push(_initialOperators[i]);
             emit OperatorSet(_initialOperators[i], true);
         }
+    }
+
+    function operatorCount() external view returns (uint256) {
+        return operatorList.length;
     }
 
     function execute(address target, bytes calldata data) external onlyOperator returns (bytes memory) {
@@ -35,7 +43,27 @@ contract ConvexCore {
     }
 
     function setOperator(address _operator, bool _active) external onlyOperator {
-        operators[_operator] = _active;
+        if (_active) {
+            if (operators[_operator]) return;
+            operators[_operator] = true;
+            _operatorIndex[_operator] = operatorList.length + 1;
+            operatorList.push(_operator);
+        } else {
+            if (!operators[_operator]) return;
+            if (operatorList.length == 1) revert("Cannot remove last operator");
+            operators[_operator] = false;
+
+            uint256 idx = _operatorIndex[_operator] - 1;
+            uint256 lastIdx = operatorList.length - 1;
+            if (idx != lastIdx) {
+                address last = operatorList[lastIdx];
+                operatorList[idx] = last;
+                _operatorIndex[last] = idx + 1;
+            }
+            operatorList.pop();
+            delete _operatorIndex[_operator];
+        }
+
         emit OperatorSet(_operator, _active);
     }
 }
