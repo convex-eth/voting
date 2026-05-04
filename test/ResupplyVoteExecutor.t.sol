@@ -37,6 +37,7 @@ contract ResupplyVoteExecutorTest is Test {
 
     address internal alice = makeAddr("alice");
     address internal operator = makeAddr("operator");
+    address internal guardian = makeAddr("guardian");
 
     uint256 constant WEEK = 86400 * 7;
     uint256 constant WD = 1e17;
@@ -64,6 +65,7 @@ contract ResupplyVoteExecutorTest is Test {
         vm.etch(RESUPPLY_STAKER, address(mockStaker).code);
 
         executor = new ResupplyVoteExecutor(address(this), address(daoVotePlatform), 0);
+        executor.setGuardian(guardian, true);
 
         // Ensure the mock is set at the constant address
         require(RESUPPLY_STAKER.code.length > 0, "Mock not etched");
@@ -95,6 +97,11 @@ contract ResupplyVoteExecutorTest is Test {
     function _finalizeProposal(uint256 pid) internal {
         (, uint256 endTime,,,) = daoVotePlatform.proposals(pid);
         vm.warp(endTime + 13 hours);
+    }
+
+    function _finishProposal(uint256 pid) internal {
+        (, uint256 endTime,,,) = daoVotePlatform.proposals(pid);
+        vm.warp(endTime + 1);
     }
 
     function _voteYes(address user) internal {
@@ -150,15 +157,43 @@ contract ResupplyVoteExecutorTest is Test {
         assertTrue(executor.isDone(pid));
     }
 
+    function test_guardianCanExecuteAfterFinished() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _voteYes(alice);
+        _finishProposal(pid);
+
+        assertTrue(daoVotePlatform.isFinished(pid));
+        assertFalse(daoVotePlatform.isFinalized(pid));
+
+        vm.prank(guardian);
+        executor.executeDaoVote(pid);
+
+        assertTrue(executor.isDone(pid));
+    }
+
+    function test_nonGuardianCannotExecuteBeforeFinalized() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _voteYes(alice);
+        _finishProposal(pid);
+
+        vm.prank(alice);
+        vm.expectRevert(ResupplyVoteExecutor.NotFinished.selector);
+        executor.executeDaoVote(pid);
+    }
+
     function test_setGuardian() public {
-        address guardian = makeAddr("guardian");
-        assertFalse(executor.guardians(guardian));
+        address newGuardian = makeAddr("newGuardian");
+        assertFalse(executor.guardians(newGuardian));
 
-        executor.setGuardian(guardian, true);
-        assertTrue(executor.guardians(guardian));
+        executor.setGuardian(newGuardian, true);
+        assertTrue(executor.guardians(newGuardian));
 
-        executor.setGuardian(guardian, false);
-        assertFalse(executor.guardians(guardian));
+        executor.setGuardian(newGuardian, false);
+        assertFalse(executor.guardians(newGuardian));
     }
 
     function test_onlyOwnerCanSetGuardian() public {
@@ -174,6 +209,18 @@ contract ResupplyVoteExecutorTest is Test {
         assertEq(executor.quorumBps(), 1000);
     }
 
+    function test_quorumNotMetWhenTotalSupplyZero() public {
+        _warpToNextEpoch();
+
+        executor.setQuorum(1000);
+
+        uint256 pid = _createProposal();
+        _finalizeProposal(pid);
+
+        vm.expectRevert();
+        executor.executeDaoVote(pid);
+    }
+
     function test_onlyOwnerCanSetQuorum() public {
         vm.prank(makeAddr("notOwner"));
         vm.expectRevert();
@@ -183,6 +230,11 @@ contract ResupplyVoteExecutorTest is Test {
     function test_setQuorumCannotExceedMax() public {
         vm.expectRevert(ResupplyVoteExecutor.InvalidQuorum.selector);
         executor.setQuorum(10001);
+    }
+
+    function test_cannotConstructWithQuorumAboveBps() public {
+        vm.expectRevert(ResupplyVoteExecutor.InvalidQuorum.selector);
+        new ResupplyVoteExecutor(address(this), address(daoVotePlatform), 10001);
     }
 
     function test_eventEmitted() public {
