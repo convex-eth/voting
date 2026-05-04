@@ -118,6 +118,17 @@ contract GaugeProposerTest is Test {
         assertEq(proposer.proposalLength(), 5 days);
     }
 
+    function test_cannotSetProposalLengthTooShort() public {
+        uint256 tooShort = gaugeVotePlatform.MIN_PROPOSAL_DURATION() - 1;
+        vm.expectRevert("Below minimum");
+        proposer.setProposalLength(tooShort);
+    }
+
+    function test_cannotSetProposalLengthTooLong() public {
+        vm.expectRevert("Above maximum");
+        proposer.setProposalLength(6 days + 1);
+    }
+
     function test_onlyOwnerCanSetProposalLength() public {
         vm.expectRevert();
         vm.prank(makeAddr("notOwner"));

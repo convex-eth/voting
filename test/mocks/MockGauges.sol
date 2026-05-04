@@ -35,3 +35,5 @@ contract MockCurveGauge is ICurveGauge {
         return killed;
     }
 }
+
+contract MockLegacyCurveGauge {}

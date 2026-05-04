@@ -139,9 +139,10 @@ contract GaugeVotePlatformTest is Test {
 
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + platform.MIN_PROPOSAL_DURATION() - 1;
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
-        platform.createProposal(startTime, startTime + 12 hours);
+        platform.createProposal(startTime, endTime);
     }
 
     function test_cannotCreateProposalTooLong() public {
@@ -149,6 +150,15 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 7 days);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = vm.getBlockTimestamp() - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(GaugeVotePlatform.BadTime.selector);
+        platform.createProposal(startTime, endTime);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
@@ -295,6 +305,30 @@ contract GaugeVotePlatformTest is Test {
 
         address[] memory gauges = _getGauges2(address(gauge1), address(gauge2));
         uint256[] memory weights = _getWeights2(6000, 5000);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
+    function test_cannotVoteWithIncompleteWeightTotal() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        uint256[] memory weights = _getWeights(5000);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
+    function test_cannotVoteWithEmptyGaugeList() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = new address[](0);
+        uint256[] memory weights = new uint256[](0);
         vm.prank(alice);
         vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
         platform.vote(alice, gauges, weights);
@@ -1113,6 +1147,110 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         // Totals should be correct
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockWithDelegateBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockAfterSyncBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        delegation.sync(alice);
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_externalSyncBeforeDelegateVotesThenDirectRevote() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        delegation.sync(alice);
+        vm.warp(vm.getBlockTimestamp() + 1);
+
+        _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), mockVlCVX.balanceAtEpochOf(proposalEpoch, bob));
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), mockVlCVX.balanceAtEpochOf(proposalEpoch, alice));
+        assertEq(platform.voteTotals(pid), expectedTotal);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleRelock() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 800, dave);
+        _lockAndDelegate(dave, 400, address(0));
+        _warpToNextEpoch();
+
+        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
+        vm.warp(currentEpoch + 6 days);
+
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        platform.createProposal(startTime, endTime);
+        uint256 pid = platform.proposalCount() - 1;
+        (,, proposalEpoch) = platform.proposals(pid);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+
+        vm.warp(startTime);
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
+        _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+
+        assertEq(platform.voteTotals(pid), expectedTotal);
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 

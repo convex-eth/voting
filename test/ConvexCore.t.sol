@@ -27,6 +27,34 @@ contract ConvexCoreTest is Test {
         assertEq(core.operatorList(1), operatorB);
     }
 
+    function test_constructorInitializesUniqueNonZeroOperators() public {
+        address[] memory operators = new address[](3);
+        operators[0] = operatorA;
+        operators[1] = operatorB;
+        operators[2] = operatorA;
+
+        ConvexCore duplicateCore = new ConvexCore(operators);
+
+        assertTrue(duplicateCore.operators(operatorA));
+        assertTrue(duplicateCore.operators(operatorB));
+        assertEq(duplicateCore.operatorCount(), 2);
+    }
+
+    function test_constructorRejectsEmptyOperatorSet() public {
+        address[] memory operators = new address[](0);
+
+        vm.expectRevert();
+        new ConvexCore(operators);
+    }
+
+    function test_constructorRejectsZeroOperator() public {
+        address[] memory operators = new address[](1);
+        operators[0] = address(0);
+
+        vm.expectRevert();
+        new ConvexCore(operators);
+    }
+
     function test_addOperator() public {
         vm.prank(operatorA);
         core.setOperator(operatorC, true);
@@ -82,6 +110,12 @@ contract ConvexCoreTest is Test {
         vm.prank(operatorA);
         vm.expectRevert("Cannot remove last operator");
         core.setOperator(operatorA, false);
+    }
+
+    function test_cannotSetZeroOperator() public {
+        vm.prank(operatorA);
+        vm.expectRevert();
+        core.setOperator(address(0), true);
     }
 
     function test_nonOperatorCannotSetOperator() public {

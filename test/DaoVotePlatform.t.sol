@@ -120,9 +120,10 @@ contract DaoVotePlatformTest is Test {
 
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + dao.MIN_PROPOSAL_DURATION() - 1;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
-        dao.createProposal(startTime, startTime + 12 hours, DaoVotePlatform.VoteType.Parameter, 1);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateProposalTooLong() public {
@@ -130,6 +131,15 @@ contract DaoVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
         dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter, 1);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = vm.getBlockTimestamp() - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(DaoVotePlatform.BadTime.selector);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
@@ -893,6 +903,108 @@ contract DaoVotePlatformTest is Test {
         // Bob votes — his adjustedWeight already reflects alice's growth subtraction
         _voteYes(bob);
 
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockWithDelegateBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _voteNo(alice);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+
+        _voteYes(bob);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_relockAfterSyncBeforeDelegateVotes() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        delegation.sync(alice);
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        _voteNo(alice);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+
+        _voteYes(bob);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_userBaseDiff_externalSyncBeforeDelegateVotesThenDirectRevote() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _voteNo(alice);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        delegation.sync(alice);
+        vm.warp(vm.getBlockTimestamp() + 1);
+
+        _voteYes(bob);
+        _voteNo(alice);
+
+        uint256 expectedTotal =
+            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+
+        assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
+        assertEq(dao.voteTotals(pid), expectedTotal);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleRelock() public {
+        _lockAndDelegate(alice, 1000, dave);
+        _lockAndDelegate(bob, 800, dave);
+        _lockAndDelegate(dave, 400, address(0));
+        _warpToNextEpoch();
+
+        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
+        vm.warp(currentEpoch + 6 days);
+
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + 4 days;
+        vm.prank(operator);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
+        uint256 pid = dao.proposalCount() - 1;
+        (,, proposalEpoch,,) = dao.proposals(pid);
+
+        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+
+        vm.warp(startTime);
+
+        _voteNo(alice);
+        _voteYes(dave);
+        _voteNo(bob);
+
+        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
+            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+
+        assertEq(dao.voteTotals(pid), expectedTotal);
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 

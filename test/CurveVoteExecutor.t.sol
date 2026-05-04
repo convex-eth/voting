@@ -371,6 +371,18 @@ contract CurveVoteExecutorTest is Test {
         executor.executeDaoVote(pid);
     }
 
+    function test_quorumNotMetWhenTotalSupplyZero() public {
+        _warpToNextEpoch();
+
+        executor.setQuorum(1000);
+
+        uint256 pid = _createProposal(DaoVotePlatform.VoteType.Parameter, 1);
+        _finalizeProposal(pid);
+
+        vm.expectRevert();
+        executor.executeDaoVote(pid);
+    }
+
     function test_quorumZeroAlwaysPasses() public {
         _lockAndDelegate(alice, 100, address(0));
         _warpToNextEpoch();
@@ -394,5 +406,10 @@ contract CurveVoteExecutorTest is Test {
     function test_setQuorumCannotExceedMax() public {
         vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
         executor.setQuorum(10001);
+    }
+
+    function test_cannotConstructWithQuorumAboveBps() public {
+        vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
+        new CurveVoteExecutor(address(this), address(dao), address(voteDelegate), 10001);
     }
 }
