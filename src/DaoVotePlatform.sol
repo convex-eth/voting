@@ -238,13 +238,17 @@ contract DaoVotePlatform is Ownable2Step {
             if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
                 delegation.sync(_account);
 
-                uint256 truncatedDiff = ((userBaseDiff / WEIGHT_DIVISOR) * WEIGHT_DIVISOR);
-                UserInfo storage del = userInfo[proposalId][user.delegate];
-                if (del.voteStatus > 0) {
-                    pendingWeightAdjustment[proposalId][user.delegate] -= int96(int256(truncatedDiff));
-                    emit PendingWeightAdjustment(proposalId, user.delegate, -int256(truncatedDiff));
-                } else {
-                    del.adjustedWeight -= int96(int256(truncatedDiff));
+                uint256 currentDelWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
+                (uint256 preSyncWeight,) = delegation.getSyncSnapshot(_account, prop.epoch);
+                int256 realDiff = int256(currentDelWeight) - int256(preSyncWeight);
+                if (realDiff > 0) {
+                    UserInfo storage del = userInfo[proposalId][user.delegate];
+                    if (del.voteStatus > 0) {
+                        pendingWeightAdjustment[proposalId][user.delegate] -= int96(realDiff);
+                        emit PendingWeightAdjustment(proposalId, user.delegate, -realDiff);
+                    } else {
+                        del.adjustedWeight -= int96(realDiff);
+                    }
                 }
             }
 
