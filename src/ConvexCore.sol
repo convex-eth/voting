@@ -6,6 +6,8 @@ contract ConvexCore {
     mapping(address => uint256) private _operatorIndex;
     address[] public operatorList;
 
+    error ZeroAddress();
+
     event OperatorSet(address indexed operator, bool active);
     event Executed(address indexed target, bytes data, bool success, bytes returnData);
 
@@ -16,6 +18,8 @@ contract ConvexCore {
 
     constructor(address[] memory _initialOperators) {
         for (uint256 i = 0; i < _initialOperators.length; i++) {
+            if (_initialOperators[i] == address(0)) revert ZeroAddress();
+            if (operators[_initialOperators[i]]) revert("Duplicate operator");
             operators[_initialOperators[i]] = true;
             _operatorIndex[_initialOperators[i]] = operatorList.length + 1;
             operatorList.push(_initialOperators[i]);
@@ -43,6 +47,7 @@ contract ConvexCore {
     }
 
     function setOperator(address _operator, bool _active) external onlyOperator {
+        if (_operator == address(0)) revert ZeroAddress();
         if (_active) {
             if (operators[_operator]) return;
             operators[_operator] = true;
