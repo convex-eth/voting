@@ -310,6 +310,30 @@ contract GaugeVotePlatformTest is Test {
         platform.vote(alice, gauges, weights);
     }
 
+    function test_cannotVoteWithIncompleteWeightTotal() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = _getGauges(address(gauge1));
+        uint256[] memory weights = _getWeights(5000);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
+    function test_cannotVoteWithEmptyGaugeList() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        _createProposal();
+
+        address[] memory gauges = new address[](0);
+        uint256[] memory weights = new uint256[](0);
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.MaxWeight.selector);
+        platform.vote(alice, gauges, weights);
+    }
+
     // ========== Scenario 1: Delegate with two delegatees ==========
 
     function test_scenario1_delegateWithTwoDelegatees() public {

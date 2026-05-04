@@ -13,6 +13,7 @@ contract CurveGaugeRegistryTest is Test {
     MockCurveGauge internal gauge3;
     MockCurveGauge internal gauge4;
     MockCurveGauge internal gauge5;
+    MockLegacyCurveGauge internal legacyGauge;
 
     address constant GAUGE_CONTROLLER = address(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
 
@@ -25,6 +26,7 @@ contract CurveGaugeRegistryTest is Test {
         gauge3 = new MockCurveGauge();
         gauge4 = new MockCurveGauge();
         gauge5 = new MockCurveGauge();
+        legacyGauge = new MockLegacyCurveGauge();
 
         address[] memory initial = new address[](0);
         registry = new CurveGaugeRegistry(address(this), initial);
@@ -34,6 +36,7 @@ contract CurveGaugeRegistryTest is Test {
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge3), 3000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge4), 0);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge5), 500);
+        MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(legacyGauge), 1000);
     }
 
     function test_initialGaugesRegisteredWithoutValidation() public {
@@ -42,7 +45,6 @@ contract CurveGaugeRegistryTest is Test {
         initial[1] = address(gauge2);
         initial[2] = address(gauge5);
 
-        address[] memory empty = new address[](0);
         CurveGaugeRegistry reg = new CurveGaugeRegistry(address(this), initial);
 
         assertEq(reg.gaugeLength(), 3);
@@ -214,6 +216,17 @@ contract CurveGaugeRegistryTest is Test {
     function test_isValidGaugeKilled() public {
         gauge1.setKilled(true);
         assertFalse(registry.isValidGauge(address(gauge1)));
+    }
+
+    function test_legacyCurveGaugeWithoutKillSwitchCanBeSeededInConstructor() public {
+        address[] memory initial = new address[](1);
+        initial[0] = address(legacyGauge);
+
+        CurveGaugeRegistry reg = new CurveGaugeRegistry(address(this), initial);
+
+        assertTrue(reg.isRegisteredGauge(address(legacyGauge)));
+        assertEq(reg.gaugeLength(), 1);
+        assertEq(reg.activeGauges(0), address(legacyGauge));
     }
 
     function test_setGaugeEmitsAddEvent() public {
