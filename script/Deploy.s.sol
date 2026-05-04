@@ -58,12 +58,11 @@ contract Deploy is Script {
     }
 
     function run() external {
-        address deployer = msg.sender;
         address[] memory initialOperators = new address[](2);
-        initialOperators[0] = deployer;
+        initialOperators[0] = CONVEX_DEPLOYER;
         initialOperators[1] = MSIG;
 
-        vm.startBroadcast();
+        vm.startBroadcast(CONVEX_DEPLOYER);
 
         // ── 1. Deploy ConvexCore ──
         core = new ConvexCore(initialOperators);
