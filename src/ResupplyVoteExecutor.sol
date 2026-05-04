@@ -20,8 +20,10 @@ contract ResupplyVoteExecutor is Ownable2Step {
     error AlreadyExecuted();
     error QuorumNotMet();
     error ZeroSupply();
+    error InvalidQuorum();
 
     uint256 public constant WEIGHT_BPS = 10000;
+    uint256 public constant MAX_QUORUM_BPS = 10000;
     address public constant RESUPPLY_STAKER = 0xCCCCCccc94bFeCDd365b4Ee6B86108fC91848901;
     address public constant RESUPPLY_VOTER = 0x11111111063874cE8dC6232cb5C1C849359476E6;
 
@@ -36,6 +38,7 @@ contract ResupplyVoteExecutor is Ownable2Step {
     event QuorumSet(uint256 quorumBps);
 
     constructor(address _owner, address _votePlatform, uint256 _quorumBps) Ownable(_owner) {
+        if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         votePlatform = DaoVotePlatform(_votePlatform);
         quorumBps = _quorumBps;
     }
@@ -81,6 +84,7 @@ contract ResupplyVoteExecutor is Ownable2Step {
     }
 
     function setQuorum(uint256 _quorumBps) external onlyOwner {
+        if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         quorumBps = _quorumBps;
         emit QuorumSet(_quorumBps);
     }

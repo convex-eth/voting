@@ -12,8 +12,10 @@ contract CurveVoteExecutor is Ownable2Step {
     error AlreadyExecuted();
     error QuorumNotMet();
     error ZeroSupply();
+    error InvalidQuorum();
 
     uint256 public constant WEIGHT_BPS = 10000;
+    uint256 public constant MAX_QUORUM_BPS = 10000;
 
     DaoVotePlatform public immutable votePlatform;
     IVoteDelegationExtension public immutable voteDelegate;
@@ -27,6 +29,7 @@ contract CurveVoteExecutor is Ownable2Step {
     event QuorumSet(uint256 quorumBps);
 
     constructor(address _owner, address _votePlatform, address _voteDelegate, uint256 _quorumBps) Ownable(_owner) {
+        if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         votePlatform = DaoVotePlatform(_votePlatform);
         voteDelegate = IVoteDelegationExtension(_voteDelegate);
         quorumBps = _quorumBps;
@@ -66,6 +69,7 @@ contract CurveVoteExecutor is Ownable2Step {
     }
 
     function setQuorum(uint256 _quorumBps) external onlyOwner {
+        if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         quorumBps = _quorumBps;
         emit QuorumSet(_quorumBps);
     }

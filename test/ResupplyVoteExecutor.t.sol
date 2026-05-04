@@ -180,6 +180,11 @@ contract ResupplyVoteExecutorTest is Test {
         executor.setQuorum(1000);
     }
 
+    function test_setQuorumCannotExceedMax() public {
+        vm.expectRevert(ResupplyVoteExecutor.InvalidQuorum.selector);
+        executor.setQuorum(10001);
+    }
+
     function test_eventEmitted() public {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();

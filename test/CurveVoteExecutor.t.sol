@@ -390,4 +390,9 @@ contract CurveVoteExecutorTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
         executor.setQuorum(1000);
     }
+
+    function test_setQuorumCannotExceedMax() public {
+        vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
+        executor.setQuorum(10001);
+    }
 }
