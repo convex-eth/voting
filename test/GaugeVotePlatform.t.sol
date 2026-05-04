@@ -139,9 +139,10 @@ contract GaugeVotePlatformTest is Test {
 
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + platform.MIN_PROPOSAL_DURATION() - 1;
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
-        platform.createProposal(startTime, startTime + 12 hours);
+        platform.createProposal(startTime, endTime);
     }
 
     function test_cannotCreateProposalTooLong() public {
@@ -149,6 +150,15 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(GaugeVotePlatform.BadTime.selector);
         platform.createProposal(startTime, startTime + 7 days);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = vm.getBlockTimestamp() - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(GaugeVotePlatform.BadTime.selector);
+        platform.createProposal(startTime, endTime);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {

@@ -120,9 +120,10 @@ contract DaoVotePlatformTest is Test {
 
     function test_cannotCreateProposalTooShort() public {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + dao.MIN_PROPOSAL_DURATION() - 1;
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
-        dao.createProposal(startTime, startTime + 12 hours, DaoVotePlatform.VoteType.Parameter, 1);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateProposalTooLong() public {
@@ -130,6 +131,15 @@ contract DaoVotePlatformTest is Test {
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.BadTime.selector);
         dao.createProposal(startTime, startTime + 7 days, DaoVotePlatform.VoteType.Parameter, 1);
+    }
+
+    function test_cannotCreateProposalWithEndTimeInPast() public {
+        uint256 startTime = vm.getBlockTimestamp() - 5 days;
+        uint256 endTime = startTime + 4 days;
+
+        vm.prank(operator);
+        vm.expectRevert(DaoVotePlatform.BadTime.selector);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
     function test_cannotCreateBeforePreviousEnds() public {
