@@ -86,8 +86,6 @@ contract Delegation {
         vlCVX.checkpointEpoch();
         uint256 currentEpoch = vlCVX.epochCount() - 2;
 
-        if (syncSnapshots[_user][currentEpoch].timestamp != 0) return;
-
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
         if (len == 0) return;
@@ -96,15 +94,12 @@ contract Delegation {
         address futureDelegate = history[len - 1].delegate;
 
         uint256 offset = currentEpoch & 7;
-        EpochWeightingEntry memory entry = userEpochWeights[_user][currentEpoch >> 3];
-        uint256 raw;
+        uint256 entryIdx = currentEpoch >> 3;
+        EpochWeightingEntry memory entry = userEpochWeights[_user][entryIdx];
+        uint256 prePacked;
         assembly {
-            raw := mload(add(entry, mul(offset, 32)))
+            prePacked := mload(add(entry, mul(offset, 32)))
         }
-        syncSnapshots[_user][currentEpoch] = SyncSnapshot({
-            preSyncWeight: uint32(raw),
-            timestamp: uint96(block.timestamp)
-        });
 
         if (currentDelegate != address(0)) {
             if (currentDelegate == futureDelegate) {
@@ -117,6 +112,19 @@ contract Delegation {
             }
         } else if (futureDelegate != address(0)) {
             _syncUser(_user, futureDelegate, vlCVX.epochCount() - 1, FILL_EPOCHS);
+        }
+
+        entry = userEpochWeights[_user][entryIdx];
+        uint256 postPacked;
+        assembly {
+            postPacked := mload(add(entry, mul(offset, 32)))
+        }
+
+        if (postPacked != prePacked) {
+            syncSnapshots[_user][currentEpoch] = SyncSnapshot({
+                preSyncWeight: uint32(prePacked),
+                timestamp: uint96(block.timestamp)
+            });
         }
     }
 
