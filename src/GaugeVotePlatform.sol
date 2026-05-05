@@ -238,13 +238,24 @@ contract GaugeVotePlatform is Ownable2Step {
                 delegation.sync(_account);
                 
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
-                (uint256 preSyncWeight,) = delegation.getSyncSnapshot(_account, prop.epoch);
+                (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);
                 int256 realDiff = int256(currentDelWeight) - int256(preSyncWeight);
                 if (realDiff > 0) {
                     UserInfo storage del = userInfo[proposalId][user.delegate];
                     if (del.voteStatus > 0) {
-                        pendingWeightAdjustment[proposalId][user.delegate] -= int96(realDiff);
-                        emit PendingWeightAdjustment(proposalId, user.delegate, -realDiff);
+                        if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
+                            GaugeVote[] storage delegateVotes = votes[proposalId][user.delegate];
+                            uint256 len = delegateVotes.length;
+                            for (uint256 i = 0; i < len;) {
+                                _changeGaugeTotal(proposalId, delegateVotes[i].gauge, -(int256(uint256(delegateVotes[i].weight)) * realDiff / int256(max_weight)));
+                                unchecked { ++i; }
+                            }
+                            voteTotals[proposalId] -= uint256(realDiff);
+                            del.adjustedWeight -= int96(realDiff);
+                        } else {
+                            pendingWeightAdjustment[proposalId][user.delegate] -= int96(realDiff);
+                            emit PendingWeightAdjustment(proposalId, user.delegate, -realDiff);
+                        }
                     } else {
                         del.adjustedWeight -= int96(realDiff);
                     }
