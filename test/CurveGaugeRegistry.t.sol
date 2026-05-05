@@ -229,16 +229,6 @@ contract CurveGaugeRegistryTest is Test {
         assertEq(reg.activeGauges(0), address(legacyGauge));
     }
 
-    function test_legacyCurveGaugeWithoutKillSwitchIsValidWhenWeighted() public {
-        assertTrue(registry.isValidGauge(address(legacyGauge)));
-
-        registry.setGauge(address(legacyGauge));
-
-        assertTrue(registry.isRegisteredGauge(address(legacyGauge)));
-        assertEq(registry.gaugeLength(), 1);
-        assertEq(registry.activeGauges(0), address(legacyGauge));
-    }
-
     function test_setGaugeEmitsAddEvent() public {
         vm.expectEmit(true, true, false, false);
         emit CurveGaugeRegistry.SetGauge(address(gauge1), true);

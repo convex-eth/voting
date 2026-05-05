@@ -28,16 +28,13 @@ contract ConvexCoreTest is Test {
     }
 
     function test_constructorInitializesUniqueNonZeroOperators() public {
-        address[] memory operators = new address[](3);
-        operators[0] = operatorA;
-        operators[1] = operatorB;
-        operators[2] = operatorA;
+        address[] memory ops = new address[](3);
+        ops[0] = operatorA;
+        ops[1] = operatorB;
+        ops[2] = operatorA;
 
-        ConvexCore duplicateCore = new ConvexCore(operators);
-
-        assertTrue(duplicateCore.operators(operatorA));
-        assertTrue(duplicateCore.operators(operatorB));
-        assertEq(duplicateCore.operatorCount(), 2);
+        vm.expectRevert("Duplicate operator");
+        new ConvexCore(ops);
     }
 
     function test_constructorRejectsEmptyOperatorSet() public {

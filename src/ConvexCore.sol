@@ -17,6 +17,7 @@ contract ConvexCore {
     }
 
     constructor(address[] memory _initialOperators) {
+        if (_initialOperators.length == 0) revert("No operators");
         for (uint256 i = 0; i < _initialOperators.length; i++) {
             if (_initialOperators[i] == address(0)) revert ZeroAddress();
             if (operators[_initialOperators[i]]) revert("Duplicate operator");
