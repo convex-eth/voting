@@ -44,6 +44,7 @@ contract Deploy is Script {
     address constant CONVEX_BOT = 0x724061efDFef4a421e8be05133ad24922D07b5Bf;
     address constant CONVEX_DEPLOYER = 0x947B7742C403f20e5FaCcDAc5E092C943E7D0277;
     address constant VOTE_DELEGATE = 0x5349ffba494aC3c888ffa16fD438F44B8c67fB07;
+    address constant VOTIUM = 0xde1E6A7ED0ad3F61D531a8a78E83CcDdbd6E0c49;
 
     uint256 constant DEFAULT_QUORUM = 1500; // 15%
 
@@ -103,7 +104,18 @@ contract Deploy is Script {
         console.log("Registered OWNER");
 
         // ── 6. Deploy CurveGaugeRegistry ──
-        address[] memory curveInitialGauges = new address[](0);
+        address[] memory curveInitialGauges = new address[](11);
+        curveInitialGauges[0]  = 0x7ca5b0a2910B33e9759DC7dDB0413949071D7575;
+        curveInitialGauges[1]  = 0xBC89cd85491d81C6AD2954E6d0362Ee29fCa8F53;
+        curveInitialGauges[2]  = 0xFA712EE4788C042e2B7BB55E6cb8ec569C4530c1;
+        curveInitialGauges[3]  = 0x69Fb7c45726cfE2baDeE8317005d3F94bE838840;
+        curveInitialGauges[4]  = 0x64E3C23bfc40722d3B649844055F1D51c1ac041d;
+        curveInitialGauges[5]  = 0xB1F2cdeC61db658F091671F5f199635aEF202CAC;
+        curveInitialGauges[6]  = 0xA90996896660DEcC6E997655E065b23788857849;
+        curveInitialGauges[7]  = 0x705350c4BcD35c9441419DdD5d2f097d7a55410F;
+        curveInitialGauges[8]  = 0x4c18E409Dc8619bFb6a1cB56D114C3f592E0aE79;
+        curveInitialGauges[9]  = 0xbFcF63294aD7105dEa65aA58F8AE5BE2D9d0952A;
+        curveInitialGauges[10] = 0x18478F737d40ed7DEFe5a9d6F1560d84E283B74e;
         CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry(address(core), curveInitialGauges);
         console.log("CurveGaugeRegistry:", address(curveGaugeRegistry));
 
@@ -141,7 +153,8 @@ contract Deploy is Script {
         _setOperator(address(curveGaugeVoting), MSIG);
         console.log("Set MSIG as operator on CurveGaugeVoting");
 
-        // ── 9. Deploy Executors ──
+        core.execute(address(curveGaugeVoting), abi.encodeWithSignature("setOvertimeAccount(address,bool)", VOTIUM, true));
+        console.log("Set Votium as equalizer on CurveGaugeVoting");
         CurveVoteExecutor curveVoteExecutor = new CurveVoteExecutor(
             address(core),
             address(curveDaoVoting),
@@ -231,7 +244,8 @@ contract Deploy is Script {
         _setOperator(address(fxGaugeVoting), MSIG);
         console.log("Set MSIG as operator on FxGaugeVoting");
 
-        // ── 15. Deploy F(x) GenericDaoProposer ──
+        core.execute(address(fxGaugeVoting), abi.encodeWithSignature("setOvertimeAccount(address,bool)", VOTIUM, true));
+        console.log("Set Votium as equalizer on FxGaugeVoting");
         GenericDaoProposer fxDaoProposer = new GenericDaoProposer(
             address(core),
             address(fxDaoVoting)
