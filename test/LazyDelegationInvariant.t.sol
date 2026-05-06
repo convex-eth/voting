@@ -115,8 +115,11 @@ contract LazyDelegationHandler is Test {
         uint256 index = _actorIndex(userSeed);
         uint256 delta = bound(amountSeed, 1, 500) * WD;
         boostedWeights[index] += delta;
-        mockVlCVX.mockRelock(actors[index], 0, boostedWeights[index]);
-        _refreshSupplyCaps();
+        try mockVlCVX.mockRelock(actors[index], 0, boostedWeights[index]) {
+            _refreshSupplyCaps();
+        } catch {
+            boostedWeights[index] -= delta;
+        }
         _tick();
     }
 

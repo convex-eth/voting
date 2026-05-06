@@ -128,6 +128,51 @@ contract Delegation {
         }
     }
 
+    function syncAtEpoch(address _user, uint256 _epoch) external {
+        if (_epoch >= vlCVX.epochCount() - 1) return;
+
+        SetDelegateRecord[] storage history = delegateHistory[_user];
+        uint256 len = history.length;
+        if (len == 0) return;
+
+        address delegate = _getDelegateAtEpoch(history, _epoch);
+        if (delegate == address(0)) return;
+
+        uint256 offset = _epoch & 7;
+        uint256 entryIdx = _epoch >> 3;
+        EpochWeightingEntry memory userEntry = userEpochWeights[_user][entryIdx];
+        uint256 prePacked;
+        assembly {
+            prePacked := mload(add(userEntry, mul(offset, 32)))
+        }
+
+        uint256 newWeight = vlCVX.balanceAtEpochOf(_epoch, _user);
+        uint256 newPacked = newWeight / WEIGHT_DIVISOR;
+
+        if (newPacked == prePacked) return;
+
+        EpochWeightingEntry memory delegateEntry = delegateEpochWeights[delegate][entryIdx];
+        unchecked {
+            uint256 delta = newPacked - prePacked;
+            assembly {
+                mstore(add(delegateEntry, mul(offset, 32)), add(mload(add(delegateEntry, mul(offset, 32))), delta))
+            }
+        }
+        assembly {
+            mstore(add(userEntry, mul(offset, 32)), newPacked)
+        }
+
+        userEpochWeights[_user][entryIdx] = userEntry;
+        delegateEpochWeights[delegate][entryIdx] = delegateEntry;
+
+        syncSnapshots[_user][_epoch] = SyncSnapshot({
+            preSyncWeight: uint32(prePacked),
+            timestamp: uint96(block.timestamp)
+        });
+
+        emit Synced(_user, delegate);
+    }
+
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
         SetDelegateRecord[] storage history = delegateHistory[_user];
         return _getDelegateAtEpoch(history, _epoch);

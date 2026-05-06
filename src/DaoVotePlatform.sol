@@ -165,7 +165,7 @@ contract DaoVotePlatform is Ownable2Step {
             uint256 delWeight = delegation.userWeightAtEpochOf(epoch, _account);
             uint256 truncatedBase = (baseWeight / WEIGHT_DIVISOR) * WEIGHT_DIVISOR;
             if (truncatedBase > delWeight) {
-                delegation.sync(_account);
+                delegation.syncAtEpoch(_account, epoch);
             }
         }
 
@@ -236,7 +236,7 @@ contract DaoVotePlatform is Ownable2Step {
             user.totalDelegationWeight = uint96(currentDelBal);
 
             if (userBaseDiff > 0 && user.delegate != address(0) && user.delegate != _account) {
-                delegation.sync(_account);
+                delegation.syncAtEpoch(_account, prop.epoch);
 
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
                 (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);

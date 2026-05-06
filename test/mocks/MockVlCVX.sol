@@ -130,8 +130,14 @@ contract MockVlCVX is IvlCVX {
         _epochs[eIndex].supply += uint224(_boosted);
     }
 
+    mapping(address => mapping(uint256 => uint256)) public lastRelockEpoch;
+
     function mockRelock(address _user, uint256 _lockIndex, uint256 _newBoosted) external {
         this.checkpointEpoch();
+        uint256 currentEpochTime = _currentEpochTime();
+        require(lastRelockEpoch[_user][_lockIndex] < currentEpochTime, "already relocked this epoch");
+        lastRelockEpoch[_user][_lockIndex] = currentEpochTime;
+
         UserLock storage lk = _userLocks[_user][_lockIndex];
 
         uint256 oldBoosted = lk.boosted;
@@ -139,8 +145,8 @@ contract MockVlCVX is IvlCVX {
         _userBoosted[_user] = _userBoosted[_user] - oldBoosted + _newBoosted;
 
         lk.boosted = _newBoosted;
-        lk.lockEpoch = _currentEpochTime();
-        lk.unlockTime = _currentEpochTime() + lockDuration;
+        lk.lockEpoch = currentEpochTime;
+        lk.unlockTime = currentEpochTime + lockDuration;
     }
 
     function mockExpireLocks(address _user, uint256 _count) external {

@@ -810,13 +810,13 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
+        mockVlCVX.mockRelock(alice, 0, 1500 * WEIGHT_DIVISOR);
+
         delegation.sync(alice);
 
         uint256 current = currentEpochIndex();
         (uint256 snapWeight1, uint256 snapTs1) = delegation.getSyncSnapshot(alice, current);
         assertGt(snapTs1, 0);
-
-        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
 
         delegation.sync(alice);
 
@@ -824,13 +824,7 @@ contract DelegationTest is Test {
         assertEq(snapWeight2, snapWeight1);
         assertEq(snapTs2, snapTs1);
 
-        // delegateA is active at current epoch (same as future delegate), so gets synced
-        // Second sync returns early, so weight stays at first-sync value (1000)
-        assertEq(delegation.balanceAtEpochOf(current, delegateA), 1000 * WEIGHT_DIVISOR);
-
-        // Future epochs also stay at first-sync value
-        uint256 future = current + 1;
-        assertEq(delegation.balanceAtEpochOf(future, delegateA), 1000 * WEIGHT_DIVISOR);
+        assertEq(delegation.balanceAtEpochOf(current, delegateA), 1500 * WEIGHT_DIVISOR);
     }
 
     function test_syncStoresSnapshot() public {
@@ -841,20 +835,15 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
-        delegation.sync(alice);
+        mockVlCVX.mockRelock(alice, 0, 1500 * WEIGHT_DIVISOR);
 
-        warpToNextEpoch();
-
-        uint256 current = currentEpochIndex();
-        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
-
-        uint256 preWeight = delegation.userWeightAtEpochOf(current, alice);
+        uint256 preWeight = delegation.userWeightAtEpochOf(currentEpochIndex(), alice);
         assertGt(preWeight, 0);
 
         uint256 ts = block.timestamp;
         delegation.sync(alice);
 
-        (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice, current);
+        (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice, currentEpochIndex());
         assertEq(snapWeight, preWeight);
         assertEq(snapTs, ts);
     }
@@ -867,6 +856,8 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
+        mockVlCVX.mockRelock(alice, 0, 1500 * WEIGHT_DIVISOR);
+
         delegation.sync(alice);
 
         uint256 epoch1 = currentEpochIndex();
@@ -876,7 +867,7 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
-        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+        mockVlCVX.mockRelock(alice, 0, 2000 * WEIGHT_DIVISOR);
 
         uint256 ts2 = block.timestamp;
         delegation.sync(alice);
@@ -913,11 +904,7 @@ contract DelegationTest is Test {
 
         warpToNextEpoch();
 
-        delegation.sync(alice);
-
-        warpToNextEpoch();
-
-        mockVlCVX.mockLock(alice, 500 * WEIGHT_DIVISOR, 500 * WEIGHT_DIVISOR);
+        mockVlCVX.mockRelock(alice, 0, 1500 * WEIGHT_DIVISOR);
 
         uint256 current = currentEpochIndex();
         uint256 preWeight = delegation.userWeightAtEpochOf(current, alice);
