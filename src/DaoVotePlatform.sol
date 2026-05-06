@@ -139,12 +139,16 @@ contract DaoVotePlatform is Ownable2Step {
     function _changeVoteTotals(uint256 _proposalId, int256 _delta, uint256 _yesWeight, uint256 _noWeight) internal {
         VoteTotals storage totals = _voteTotals[_proposalId];
         int256 yesDelta = _delta * int256(_yesWeight) / int256(max_weight);
-        int256 noDelta = _delta * int256(_noWeight) / int256(max_weight);
-        unchecked {
-            if (yesDelta > 0) totals.yes += uint128(uint256(yesDelta));
-            else totals.yes -= uint128(uint256(-yesDelta));
-            if (noDelta > 0) totals.no += uint128(uint256(noDelta));
-            else totals.no -= uint128(uint256(-noDelta));
+        int256 noDelta = _delta - yesDelta;
+        if (yesDelta >= 0) {
+            totals.yes += uint128(uint256(yesDelta));
+        } else {
+            totals.yes -= uint128(uint256(-yesDelta));
+        }
+        if (noDelta >= 0) {
+            totals.no += uint128(uint256(noDelta));
+        } else {
+            totals.no -= uint128(uint256(-noDelta));
         }
     }
 
