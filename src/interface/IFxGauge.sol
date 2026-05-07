@@ -3,4 +3,5 @@ pragma solidity ^0.8.13;
 
 interface IFxGauge {
     function isActive() external view returns (bool);
+    function is_killed() external view returns (bool);
 }

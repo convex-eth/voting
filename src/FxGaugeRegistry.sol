@@ -31,7 +31,9 @@ contract FxGaugeRegistry is Ownable2Step {
 
     function isValidGauge(address _gauge) public view returns (bool) {
         uint256 gaugeType = IFxGaugeController(gaugeController).gauge_types(_gauge);
-        return ((gaugeType == LIQUIDITY_POOL || gaugeType == REBALANCE_POOL) && IFxGauge(_gauge).isActive());
+        if (gaugeType == LIQUIDITY_POOL) return IFxGauge(_gauge).isActive();
+        if (gaugeType == REBALANCE_POOL) return !IFxGauge(_gauge).is_killed();
+        return false;
     }
 
     function isRegisteredGauge(address _gauge) external view returns (bool) {
