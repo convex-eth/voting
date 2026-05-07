@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "../src/ConvexCore.sol";
+import "../src/GaugeList.sol";
 import "../src/VotingRegistry.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
@@ -48,6 +49,14 @@ contract Deploy is Script {
 
     uint256 constant DEFAULT_QUORUM = 1500; // 15%
 
+    uint8 constant VOTE_DAO = 0;
+    uint8 constant VOTE_GAUGE = 1;
+    uint8 constant GAUGE_REGISTRY = 2;
+    uint8 constant DAO_EXECUTOR = 3;
+    uint8 constant GAUGE_EXECUTOR = 4;
+    uint8 constant DAO_PROPOSER = 5;
+    uint8 constant GAUGE_PROPOSER = 6;
+
     ConvexCore core;
 
     function _setOperator(address _platform, address _operator) internal {
@@ -85,22 +94,22 @@ contract Deploy is Script {
         console.log("SurrogateRegistry:", address(surrogateRegistry));
 
         // ── 5. Register Core Components ──
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "DELEGATION", registry.VOTE_DAO, address(daoDelegation)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "DELEGATION", VOTE_DAO, address(daoDelegation)));
         console.log("Registered DELEGATION -> DAO");
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "DELEGATION", registry.VOTE_GAUGE, address(gaugeDelegation)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "DELEGATION", VOTE_GAUGE, address(gaugeDelegation)));
         console.log("Registered DELEGATION -> Gauge");
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "SURROGATE", registry.VOTE_DAO, address(surrogateRegistry)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "SURROGATE", VOTE_DAO, address(surrogateRegistry)));
         console.log("Registered SURROGATE -> DAO");
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "SURROGATE", registry.VOTE_GAUGE, address(surrogateRegistry)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "SURROGATE", VOTE_GAUGE, address(surrogateRegistry)));
         console.log("Registered SURROGATE -> Gauge");
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "ConvexCore", registry.VOTE_DAO, address(core)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "ConvexCore", VOTE_DAO, address(core)));
         console.log("Registered ConvexCore");
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "OWNER", registry.VOTE_DAO, address(core)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "OWNER", VOTE_DAO, address(core)));
         console.log("Registered OWNER");
 
         // ── 6. Deploy CurveGaugeRegistry ──
@@ -119,7 +128,7 @@ contract Deploy is Script {
         CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry(address(core), curveInitialGauges);
         console.log("CurveGaugeRegistry:", address(curveGaugeRegistry));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.GAUGE_REGISTRY, address(curveGaugeRegistry)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", GAUGE_REGISTRY, address(curveGaugeRegistry)));
         console.log("Registered CURVE -> GAUGE_REGISTRY");
 
         // ── 7. Deploy CurveDaoVoting ──
@@ -131,7 +140,7 @@ contract Deploy is Script {
         );
         console.log("CurveDaoVoting:", address(curveDaoVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.VOTE_DAO, address(curveDaoVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", VOTE_DAO, address(curveDaoVoting)));
         console.log("Registered CURVE -> VOTE_DAO");
 
         _setOperator(address(curveDaoVoting), MSIG);
@@ -147,7 +156,7 @@ contract Deploy is Script {
         );
         console.log("CurveGaugeVoting:", address(curveGaugeVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.VOTE_GAUGE, address(curveGaugeVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", VOTE_GAUGE, address(curveGaugeVoting)));
         console.log("Registered CURVE -> VOTE_GAUGE");
 
         _setOperator(address(curveGaugeVoting), MSIG);
@@ -163,7 +172,7 @@ contract Deploy is Script {
         );
         console.log("CurveVoteExecutor:", address(curveVoteExecutor));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.DAO_EXECUTOR, address(curveVoteExecutor)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", DAO_EXECUTOR, address(curveVoteExecutor)));
         console.log("Registered CURVE -> DAO_EXECUTOR");
 
         _setGuardian(address(curveVoteExecutor), MSIG);
@@ -175,7 +184,7 @@ contract Deploy is Script {
         );
         console.log("CurveGaugeExecutor:", address(curveGaugeExecutor));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.GAUGE_EXECUTOR, address(curveGaugeExecutor)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", GAUGE_EXECUTOR, address(curveGaugeExecutor)));
         console.log("Registered CURVE -> GAUGE_EXECUTOR");
 
         // ── 10. Deploy Proposers ──
@@ -185,7 +194,7 @@ contract Deploy is Script {
         );
         console.log("CurveDaoProposer:", address(curveDaoProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.DAO_PROPOSER, address(curveDaoProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", DAO_PROPOSER, address(curveDaoProposer)));
         console.log("Registered CURVE -> DAO_PROPOSER");
 
         GaugeProposer curveGaugeProposer = new GaugeProposer(
@@ -195,7 +204,7 @@ contract Deploy is Script {
         );
         console.log("GaugeProposer:", address(curveGaugeProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", registry.GAUGE_PROPOSER, address(curveGaugeProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", GAUGE_PROPOSER, address(curveGaugeProposer)));
         console.log("Registered CURVE -> GAUGE_PROPOSER");
 
         // ── 11. Set Proposers as Operators on Platforms ──
@@ -210,7 +219,7 @@ contract Deploy is Script {
         FxGaugeRegistry fxGaugeRegistry = new FxGaugeRegistry(address(core), fxInitialGauges);
         console.log("FxGaugeRegistry:", address(fxGaugeRegistry));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.GAUGE_REGISTRY, address(fxGaugeRegistry)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", GAUGE_REGISTRY, address(fxGaugeRegistry)));
         console.log("Registered FX -> GAUGE_REGISTRY");
 
         // ── 13. Deploy F(x) DaoVoting ──
@@ -222,7 +231,7 @@ contract Deploy is Script {
         );
         console.log("FxDaoVoting:", address(fxDaoVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.VOTE_DAO, address(fxDaoVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", VOTE_DAO, address(fxDaoVoting)));
         console.log("Registered FX -> VOTE_DAO");
 
         _setOperator(address(fxDaoVoting), MSIG);
@@ -238,7 +247,7 @@ contract Deploy is Script {
         );
         console.log("FxGaugeVoting:", address(fxGaugeVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.VOTE_GAUGE, address(fxGaugeVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", VOTE_GAUGE, address(fxGaugeVoting)));
         console.log("Registered FX -> VOTE_GAUGE");
 
         _setOperator(address(fxGaugeVoting), MSIG);
@@ -252,7 +261,7 @@ contract Deploy is Script {
         );
         console.log("FxDaoProposer:", address(fxDaoProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.DAO_PROPOSER, address(fxDaoProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", DAO_PROPOSER, address(fxDaoProposer)));
         console.log("Registered FX -> DAO_PROPOSER");
 
         // Set bot and deployer as operators on Fx GenericDaoProposer
@@ -270,7 +279,7 @@ contract Deploy is Script {
         );
         console.log("FxGaugeProposer:", address(fxGaugeProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.GAUGE_PROPOSER, address(fxGaugeProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", GAUGE_PROPOSER, address(fxGaugeProposer)));
         console.log("Registered FX -> GAUGE_PROPOSER");
 
         // ── 17. Set Proposers as Operators on F(x) Platforms ──
@@ -286,7 +295,7 @@ contract Deploy is Script {
         );
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", registry.GAUGE_EXECUTOR, address(fxGaugeExecutor)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", GAUGE_EXECUTOR, address(fxGaugeExecutor)));
         console.log("Registered FX -> GAUGE_EXECUTOR");
 
         // ── 19. Deploy Frax DaoVoting ──
@@ -298,7 +307,7 @@ contract Deploy is Script {
         );
         console.log("FraxDaoVoting:", address(fraxDaoVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.VOTE_DAO, address(fraxDaoVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", VOTE_DAO, address(fraxDaoVoting)));
         console.log("Registered FRAX -> VOTE_DAO");
 
         _setOperator(address(fraxDaoVoting), MSIG);
@@ -311,7 +320,7 @@ contract Deploy is Script {
         );
         console.log("FraxDaoProposer:", address(fraxDaoProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", registry.DAO_PROPOSER, address(fraxDaoProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", DAO_PROPOSER, address(fraxDaoProposer)));
         console.log("Registered FRAX -> DAO_PROPOSER");
 
         // Set bot and deployer as operators on Frax GenericDaoProposer
@@ -334,7 +343,7 @@ contract Deploy is Script {
         );
         console.log("ConvexDaoVoting:", address(convexDaoVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", registry.VOTE_DAO, address(convexDaoVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", VOTE_DAO, address(convexDaoVoting)));
         console.log("Registered CONVEX -> VOTE_DAO");
 
         _setOperator(address(convexDaoVoting), MSIG);
@@ -347,7 +356,7 @@ contract Deploy is Script {
         );
         console.log("ConvexDaoProposer:", address(convexDaoProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", registry.DAO_PROPOSER, address(convexDaoProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", DAO_PROPOSER, address(convexDaoProposer)));
         console.log("Registered CONVEX -> DAO_PROPOSER");
 
         // Set bot and deployer as operators on Convex GenericDaoProposer
@@ -370,7 +379,7 @@ contract Deploy is Script {
         );
         console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.VOTE_DAO, address(resupplyDaoVoting)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", VOTE_DAO, address(resupplyDaoVoting)));
         console.log("Registered RESUPPLY -> VOTE_DAO");
 
         _setOperator(address(resupplyDaoVoting), MSIG);
@@ -384,7 +393,7 @@ contract Deploy is Script {
         );
         console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_EXECUTOR, address(resupplyVoteExecutor)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", DAO_EXECUTOR, address(resupplyVoteExecutor)));
         console.log("Registered RESUPPLY -> DAO_EXECUTOR");
 
         _setGuardian(address(resupplyVoteExecutor), MSIG);
@@ -397,11 +406,32 @@ contract Deploy is Script {
         );
         console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
 
-        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", registry.DAO_PROPOSER, address(resupplyDaoProposer)));
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "RESUPPLY", DAO_PROPOSER, address(resupplyDaoProposer)));
         console.log("Registered RESUPPLY -> DAO_PROPOSER");
 
         _setOperator(address(resupplyDaoVoting), address(resupplyDaoProposer));
         console.log("Set ResupplyDaoProposer as operator on ResupplyDaoVoting");
+
+        // ── 28. Register Convex Gauges ──
+        address[] memory allGauges = GaugeList.getGauges();
+        uint256 batchSize = 50;
+        uint256 total = allGauges.length;
+        for (uint256 i = 0; i < total; i += batchSize) {
+            uint256 end = i + batchSize;
+            if (end > total) end = total;
+            address[] memory batch = new address[](end - i);
+            for (uint256 j = 0; j < end - i;) {
+                batch[j] = allGauges[i + j];
+                unchecked { ++j; }
+            }
+            bytes memory data = abi.encodeWithSignature("setGauges(address[])", batch);
+            (bool ok,) = address(curveGaugeRegistry).call(data);
+            if (ok) {
+                console.log("Registered gauge batch", (i / batchSize) + 1);
+            } else {
+                console.log("FAILED gauge batch", (i / batchSize) + 1);
+            }
+        }
 
         vm.stopBroadcast();
 

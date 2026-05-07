@@ -59,6 +59,17 @@ contract FxGaugeRegistry is Ownable2Step {
     }
 
     function setGauge(address _gauge) external {
+        _setGauge(_gauge);
+    }
+
+    function setGauges(address[] calldata _gauges) external {
+        for (uint256 i = 0; i < _gauges.length;) {
+            _setGauge(_gauges[i]);
+            unchecked { ++i; }
+        }
+    }
+
+    function _setGauge(address _gauge) internal {
         if (forceRemoved[_gauge]) return;
 
         bool isActive = isValidGauge(_gauge);
