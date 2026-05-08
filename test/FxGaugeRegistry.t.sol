@@ -16,9 +16,14 @@ contract MockFxGaugeController is IFxGaugeController {
 
 contract MockFxGauge is IFxGauge {
     bool public isActive;
+    bool public is_killed;
 
     function setActive(bool _active) external {
         isActive = _active;
+    }
+
+    function setKilled(bool _killed) external {
+        is_killed = _killed;
     }
 }
 
