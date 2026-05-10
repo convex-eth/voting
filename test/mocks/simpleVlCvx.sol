@@ -43,7 +43,7 @@ contract simpleVlCvx {
     bool public isShutdown;
 
     event Staked(address indexed _user, uint256 indexed _epoch, uint256 _paidAmount, uint256 _lockedAmount, uint256 _boostedAmount);
-    event Withdrawn(address indexed _user, uint256 _amount, bool _relocked);
+    event ExpiredLocksProcessed(address indexed _user, uint256 _amount, uint256 _nextUnlockIndex);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "not owner");
@@ -78,14 +78,7 @@ contract simpleVlCvx {
 
     function addReward(address, address, bool) public onlyOwner {}
 
-    function setBoost(uint256 _max, uint256 _rate, address _receivingAddress) external onlyOwner {
-        require(_max < 1500, "over max payment");
-        require(_rate < 30000, "over max rate");
-        require(_receivingAddress != address(0), "invalid address");
-        nextMaximumBoostPayment = _max;
-        nextBoostRate = _rate;
-        boostPayment = _receivingAddress;
-    }
+    function setBoost(uint256 _max, uint256 _rate, address _receivingAddress) external onlyOwner {}
 
     function rewardWeightOf(address _user) external view returns(uint256) {
         return balances[_user].boosted;
@@ -282,7 +275,12 @@ contract simpleVlCvx {
     }
 
     function lock(address _account, uint256 _amount, uint256 _spendRatio) external {
-        _lock(_account, _amount, _spendRatio, false);
+        _lock(_account, _amount, 0, false);
+    }
+
+    function relock(address _account, uint256 _amount, uint256 _spendRatio) external {
+        _processExpiredLocks(msg.sender, 0, msg.sender);
+        _lock(_account, _amount, 0, true);
     }
 
     function _lock(address _account, uint256 _amount, uint256 _spendRatio, bool _isRelock) internal {
@@ -353,7 +351,7 @@ contract simpleVlCvx {
         emit Staked(_account, lockEpoch, _amount, lockAmount, boostedAmount);
     }
 
-    function _processExpiredLocks(address _account, bool _relock, uint256 _spendRatio, address _withdrawTo) internal {
+    function _processExpiredLocks(address _account, uint256 _spendRatio, address _withdrawTo) internal {
         LockedBalance[] storage locks = userLocks[_account];
         Balances storage userBalance = balances[_account];
         uint112 locked;
@@ -377,26 +375,19 @@ contract simpleVlCvx {
             }
             userBalance.nextUnlockIndex = nextUnlockIndex;
         }
-        require(locked > 0, "no exp locks");
+        
+        if(locked > 0){
+            userBalance.locked = userBalance.locked - locked;
+            userBalance.boosted = userBalance.boosted - boostedAmount;
+            lockedSupply -= locked;
+            boostedSupply -= boostedAmount;
 
-        userBalance.locked = userBalance.locked - locked;
-        userBalance.boosted = userBalance.boosted - boostedAmount;
-        lockedSupply -= locked;
-        boostedSupply -= boostedAmount;
-
-        emit Withdrawn(_account, locked, _relock);
-
-        if (_relock) {
-            _lock(_withdrawTo, locked, _spendRatio, true);
+            emit ExpiredLocksProcessed(_account, locked, userBalance.nextUnlockIndex);
         }
     }
 
-    function withdrawExpiredLocksTo(address _withdrawTo) external {
-        _processExpiredLocks(msg.sender, false, 0, _withdrawTo);
-    }
-
-    function processExpiredLocks(bool _relock) external {
-        _processExpiredLocks(msg.sender, _relock, 0, msg.sender);
+    function processExpiredLocks() external {
+        _processExpiredLocks(msg.sender, 0, msg.sender);
     }
 
     function shutdown() external onlyOwner {
