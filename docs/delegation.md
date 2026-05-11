@@ -35,6 +35,20 @@ Delegation records are stored in `delegateHistory[user]` as an array of `(delega
 
 vlCVX balances change when users lock, relock, or let locks expire. The Delegation contract does **not** automatically update when vlCVX balances change — someone must call `sync()` to propagate the new balance into the delegation weight tables.
 
+### Expired Locks Guard
+
+**Critical:** Both `sync()` and `syncAtEpoch()` will **revert with `ExpiredLocks`** if the user has an unprocessed lock whose `unlockTime <= block.timestamp` and `amount > 0`. This check happens in `_syncUser` at `Delegation.sol:216`:
+
+```solidity
+if (_amount > 0 && _unlockTime <= block.timestamp) revert ExpiredLocks();
+```
+
+To clear expired locks, the user must call either:
+- `vlCVX.processExpiredLocks()` — withdraws the locked tokens and clears the lock entry
+- `vlCVX.relock()` — processes expired locks and immediately creates a new lock at the current epoch
+
+**Impact on voting:** Since `_initBaseInfo` in `DaoVotePlatform` and `GaugeVotePlatform` calls `delegation.syncAtEpoch()` if the truncated vlCVX balance differs from the stored Delegation weight, a user with expired locks **cannot vote or re-vote** on any active proposal until they process expired locks. This prevents the system from operating on stale lock data.
+
 ### sync(_user)
 
 Propagates the user's current vlCVX balance into the weight tables. Unlike `setDelegate`, `sync()` also writes weight for the **current epoch** (not just future epochs).
@@ -84,7 +98,7 @@ This means:
 
 Without syncing, the delegate's voting weight on future proposals will not reflect the updated vlCVX balance.
 
-The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `sync(user)` during `_initBaseInfo` if they detect that the user's vlCVX balance (truncated) exceeds their Delegation weight. This ensures mid-proposal weight increases are properly reflected. The sync is idempotent per epoch — calling it again in the same epoch returns early.
+The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `sync(user)` during `_initBaseInfo` if they detect that the user's vlCVX balance (truncated) **differs from** their Delegation weight (using `!=` comparison, not `>`). This catches mid-proposal weight changes on both increase and decrease. The sync is idempotent per epoch — calling it again in the same epoch returns early.
 
 ## Interaction with Voting Contracts
 

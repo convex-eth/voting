@@ -87,7 +87,7 @@ UserInfo is not populated at proposal creation. `_initBaseInfo` is called **only
 1. Returns immediately if `delegate != address(0)` (already initialized)
 2. Reads `baseWeight` from vlCVX at the proposal epoch
 3. Reads `delegate` from Delegation at the proposal epoch (defaults to self if zero)
-4. **Forces sync if needed**: if the user has a delegate, checks whether `vlCVX.balanceAtEpochOf(user, epoch)` truncated to 0.1 precision exceeds `delegation.userWeightAtEpochOf(user, epoch)`. If so, calls `delegation.sync(user)` to bring delegation weights up to date.
+4. **Forces sync if needed**: if the user has a delegate, checks whether `vlCVX.balanceAtEpochOf(user, epoch)` truncated to 0.1 precision **differs from** `delegation.userWeightAtEpochOf(user, epoch)` (using `!=` comparison, covering both increase and decrease). If so, calls `delegation.syncAtEpoch(user, epoch)` to bring delegation weights up to date. **Note:** if the user has expired locks (`unlockTime <= block.timestamp`), `syncAtEpoch` will revert with `ExpiredLocks` — users must call `vlCVX.processExpiredLocks()` or `vlCVX.relock()` before voting.
 5. Sets `totalDelegationWeight = delegation.balanceAtEpochOf(user, epoch)`
 6. Sets `baseWeight`, `delegate`, `adjustedWeight += totalDelegationWeight` on userInfo
 7. Emits `UserWeightChange`
@@ -134,12 +134,12 @@ If the user has already voted (`voteStatus > 0`):
 Then the weight refresh:
 
 3. Read `currentBalance = vlCVX.balanceAtEpochOf(epoch, user)`
-4. Compute `userBaseDiff = currentBalance - baseWeight` (how much baseWeight grew)
+4. Compute `userBaseDiff = currentBalance - baseWeight` (how much baseWeight changed)
 5. Update `baseWeight = currentBalance`
 6. Compute delegation delta: `delDelta = delegation.balanceAtEpochOf(user, epoch) - totalDelegationWeight`
 7. `adjustedWeight += delDelta`
 8. `totalDelegationWeight` updated to current delegation balance
-9. **If baseWeight grew AND user has a delegate**: sync delegation and add `-userBaseDiff` as pending on the delegate. This ensures when the delegate re-votes, they pick up the extra weight.
+9. **If `userBaseDiff > 0` AND user has a delegate**: sync delegation via `syncAtEpoch` and add `-userBaseDiff` as pending on the delegate. This ensures when the delegate re-votes, they pick up the extra weight. **Note:** if the user has expired locks, `syncAtEpoch` will revert — process expired locks first.
 10. Process own pending: `adjustedWeight += pendingWeightAdjustment[proposalId][user]`, clear pending
 11. Compute `newUserWeight = baseWeight + adjustedWeight`
 12. Update `voteTotals`: `voteTotals = voteTotals - oldUserWeight + newUserWeight`
@@ -190,7 +190,7 @@ Alice has 200 vlCVX delegated to Bob. Bob votes first (weight 2200 = 2000 + 200)
 Alice relocks to 700, syncs, then votes.
 
 1. _initBaseInfo for Alice:
-   - Forces sync (since 700 > 200 truncated)
+   - Forces sync (since 700 truncated differs from 200)
    - Bob has already voted, so timestamp comparison:
      - Bob's lastVoteTime vs Alice's syncSnapshot.timestamp
      - If Bob voted BEFORE Alice synced: weightToRemove = snapshot weight, 
@@ -311,7 +311,7 @@ Charlie has 0 vlCVX, 300 expired (will be 300 if relocked). Also delegates to Da
    
 2. Alice relocks to 700 and syncs. Then Alice votes:
    _initBaseInfo for Alice:
-     Forces sync on Delegation (since truncated baseWeight > delegation weight)
+      Forces sync on Delegation (truncated baseWeight differs from delegation weight)
      Dave adjusts for Alice's weight
    
 3. Dave votes with his accumulated weight.

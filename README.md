@@ -137,13 +137,17 @@ Weights are stored as `uint32` values divided by `1e17`, truncating to ~single-d
 | Action | Who should sync |
 |---|---|
 | `vlCVX.lock()` (new lock) | The user or anyone calling `sync(user)` |
-| `vlCVX.processExpiredLocks(true)` (relock) | The user |
+| `vlCVX.processExpiredLocks(false)` or `vlCVX.processExpiredLocks(true)` (relock) | The user |
 
 Without syncing, the delegate's voting weight on proposals will not reflect the updated vlCVX balance.
 
 ### Automatic Sync in Voting
 
-The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) automatically call `delegation.sync(user)` during `_initBaseInfo` if they detect the user's vlCVX balance (truncated) exceeds their recorded Delegation weight. This catches mid-proposal weight increases without requiring manual intervention.
+The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) automatically call `delegation.sync(user)` during `_initBaseInfo` if they detect the user's vlCVX balance (truncated) differs from their recorded Delegation weight. This catches mid-proposal weight changes without requiring manual intervention.
+
+### Expired Locks Prevent Sync
+
+**Critical:** If a user has locks with `unlockTime <= block.timestamp` and `amount > 0`, both `sync()` and `syncAtEpoch()` will **revert** with `ExpiredLocks`. Users must call `vlCVX.processExpiredLocks()` or `vlCVX.relock()` to clear expired locks before syncing or voting. This affects the ability to vote on active proposals — if a user's lock expires mid-proposal, they cannot vote or re-vote until they withdraw or relock.
 
 ### Delegation Changes
 
