@@ -48,6 +48,11 @@ contract EdgeCaseTest is Test {
         simpleVlCvx(address(vlcvx)).relock(user, amount, 0);
     }
 
+    function _warpToNextEpoch() internal {
+        uint256 ce = (block.timestamp / WEEK) * WEEK;
+        vm.warp(ce + WEEK + 1);
+    }
+
     function test_syncRelockVoteEdgeCase() public {
         vm.prank(alice);
         delegation.setDelegate(delegate1);
@@ -55,31 +60,29 @@ contract EdgeCaseTest is Test {
         _lock(alice, 1000 * WD);
         _lock(delegate1, 500 * WD);
 
-        uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
-        vm.warp(currentEpoch + WEEK + 1);
+        vm.warp(block.timestamp + WEEK * 17);
 
-        uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        vm.expectRevert(abi.encodeWithSignature("ExpiredLocks()"));
+        delegation.sync(alice);
+
+        _relock(alice, 800 * WD);
+
+        delegation.sync(alice);
+
+        uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
         uint256 pid = dao.proposalCount() - 1;
         vm.warp(startTime);
 
-        (,, uint48 propEpoch,,) = dao.proposals(pid);
-
         vm.prank(delegate1);
         dao.vote(delegate1, 10000, 0);
-
-        delegation.sync(alice);
-
-        _relock(alice, 500 * WD);
 
         vm.prank(alice);
         dao.vote(alice, 10000, 0);
 
         uint256 voteTotals = dao.voteTotals(pid);
-        uint256 yes = dao.getYes(pid);
-        uint256 no = dao.getNo(pid);
 
         uint256 sumEffective;
         uint256 voterCount = dao.getVoterCount(pid);
@@ -101,11 +104,11 @@ contract EdgeCaseTest is Test {
 
         _lock(delegate1, 500 * WD);
 
-        vm.warp(vm.getBlockTimestamp() + WEEK * 17);
+        vm.warp(block.timestamp + WEEK * 17);
 
         _relock(alice, 800 * WD);
 
-        uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 startTime = block.timestamp + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
@@ -134,23 +137,43 @@ contract EdgeCaseTest is Test {
         assertEq(voteTotals, sumEffective, "vote totals mismatch");
     }
 
-    function test_syncAtEpochAfterExpiryNoRevert() public {
+    function test_syncAtEpochRevertsOnExpiredLocks() public {
         _lock(alice, 1000 * WD);
 
         vm.prank(alice);
         delegation.setDelegate(delegate1);
 
-        vm.warp(vm.getBlockTimestamp() + WEEK * 2);
-
+        _warpToNextEpoch();
         delegation.sync(alice);
 
-        uint256 currentEpoch = vlcvx.findEpochId(vm.getBlockTimestamp());
+        uint256 currentEpoch = vlcvx.findEpochId(block.timestamp);
 
-        vm.warp(vm.getBlockTimestamp() + WEEK * 17);
+        vm.warp(block.timestamp + WEEK * 17);
 
+        vm.expectRevert(abi.encodeWithSignature("ExpiredLocks()"));
         delegation.syncAtEpoch(alice, currentEpoch);
+    }
 
-        uint256 weight = delegation.userWeightAtEpochOf(currentEpoch, alice);
-        assertEq(weight, 1000 * WD);
+    function test_syncRevertsOnExpiredLocks() public {
+        _lock(alice, 1000 * WD);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegate1);
+
+        _warpToNextEpoch();
+        delegation.sync(alice);
+
+        vm.warp(block.timestamp + WEEK * 17);
+
+        vm.expectRevert(abi.encodeWithSignature("ExpiredLocks()"));
+        delegation.sync(alice);
+    }
+
+    function test_relockWithoutExpiredReverts() public {
+        _lock(alice, 1000 * WD);
+
+        vm.prank(alice);
+        vm.expectRevert("no expired locks");
+        simpleVlCvx(address(vlcvx)).relock(alice, 500 * WD, 0);
     }
 }

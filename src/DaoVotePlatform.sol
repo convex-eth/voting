@@ -18,6 +18,7 @@ contract DaoVotePlatform is Ownable2Step {
     error NotSigner();
     error NotOperator();
     error MaxWeight();
+    error DelegateOverSubtracted();
 
     mapping(address => bool) public operators;
 
@@ -209,6 +210,7 @@ contract DaoVotePlatform is Ownable2Step {
 
                 _changeVoteTotals(_proposalId, -weightToRemove, del.yesWeight, del.noWeight);
                 del.adjustedWeight -= int96(weightToRemove);
+                if (del.adjustedWeight < 0) revert DelegateOverSubtracted();
             }
 
             emit UserWeightChange(_proposalId, delegate, del.baseWeight, del.adjustedWeight);
@@ -251,6 +253,7 @@ contract DaoVotePlatform is Ownable2Step {
                         if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
                             _changeVoteTotals(proposalId, -realDiff, del.yesWeight, del.noWeight);
                             del.adjustedWeight -= int96(realDiff);
+                            if (del.adjustedWeight < 0) revert DelegateOverSubtracted();
                         } else {
                             pendingWeightAdjustment[proposalId][user.delegate] -= int96(realDiff);
                             emit PendingWeightAdjustment(proposalId, user.delegate, -realDiff);

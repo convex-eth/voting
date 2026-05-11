@@ -354,6 +354,7 @@ contract simpleVlCvx {
     function _processExpiredLocks(address _account, uint256 _spendRatio, address _withdrawTo) internal {
         LockedBalance[] storage locks = userLocks[_account];
         Balances storage userBalance = balances[_account];
+        require(locks.length > 0, "no locks");
         uint112 locked;
         uint112 boostedAmount;
         uint256 length = locks.length;
@@ -375,15 +376,15 @@ contract simpleVlCvx {
             }
             userBalance.nextUnlockIndex = nextUnlockIndex;
         }
-        
-        if(locked > 0){
-            userBalance.locked = userBalance.locked - locked;
-            userBalance.boosted = userBalance.boosted - boostedAmount;
-            lockedSupply -= locked;
-            boostedSupply -= boostedAmount;
 
-            emit ExpiredLocksProcessed(_account, locked, userBalance.nextUnlockIndex);
-        }
+        require(locked > 0, "no expired locks");
+
+        userBalance.locked = userBalance.locked - locked;
+        userBalance.boosted = userBalance.boosted - boostedAmount;
+        lockedSupply -= locked;
+        boostedSupply -= boostedAmount;
+
+        emit ExpiredLocksProcessed(_account, locked, userBalance.nextUnlockIndex);
     }
 
     function processExpiredLocks() external {
