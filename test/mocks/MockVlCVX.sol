@@ -73,7 +73,7 @@ contract MockVlCVX is IvlCVX {
         if (_epoch < _epochs.length) {
             epochTime = _epochs[_epoch].date;
         } else {
-            epochTime = _currentEpochTime() + ((_epoch - _epochs.length + 1) * rewardsDuration);
+            epochTime = uint256(_epochs[0].date) + _epoch * rewardsDuration;
         }
         uint256 cutoffEpoch = epochTime > lockDuration ? epochTime - lockDuration : 0;
         uint256 amount = 0;
@@ -182,8 +182,22 @@ contract MockVlCVX is IvlCVX {
     function rewards(address, address) external pure override returns (uint256) { return 0; }
     function lockedSupply() external pure override returns (uint256) { return 0; }
     function boostedSupply() external pure override returns (uint256) { return 0; }
-    function balances(address) external pure override returns (uint112, uint112, uint32) { return (0, 0, 0); }
-    function userLocks(address, uint256) external pure override returns (uint112, uint112, uint32) { return (0, 0, 0); }
+    function balances(address _user) external view override returns (uint112, uint112, uint32) {
+        UserLock[] storage locks = _userLocks[_user];
+        uint256 nui = locks.length;
+        for (uint256 i = 0; i < locks.length; i++) {
+            if (locks[i].unlockTime > block.timestamp) {
+                nui = i;
+                break;
+            }
+        }
+        return (uint112(_userLocked[_user]), uint112(_userBoosted[_user]), uint32(nui));
+    }
+
+    function userLocks(address _user, uint256 index) external view override returns (uint112, uint112, uint32) {
+        UserLock storage lk = _userLocks[_user][index];
+        return (uint112(lk.amount), uint112(lk.boosted), uint32(lk.unlockTime));
+    }
     function boostPayment() external pure override returns (address) { return address(0); }
     function maximumBoostPayment() external pure override returns (uint256) { return 0; }
     function boostRate() external pure override returns (uint256) { return 0; }

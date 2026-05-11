@@ -5,9 +5,12 @@ import "./interface/IvlCVX.sol";
 
 contract Delegation {
     IvlCVX public immutable vlCVX;
+    uint32 public immutable epoch0Date;
     uint256 public constant FILL_EPOCHS = 16;
     uint256 public constant WEIGHT_DIVISOR = 1e17;
     uint256 public constant EPOCHS_PER_ENTRY = 8;
+    uint256 public constant REWARDS_DURATION = 86400 * 7;
+    uint256 public constant LOCK_DURATION = REWARDS_DURATION * 16;
 
     struct EpochWeightingEntry {
         uint32 w0;
@@ -32,6 +35,7 @@ contract Delegation {
 
     error NoDelegate();
     error SelfDelegation();
+    error ExpiredLocks();
 
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
@@ -41,6 +45,7 @@ contract Delegation {
 
     constructor(address _vlCVX) {
         vlCVX = IvlCVX(_vlCVX);
+        (, epoch0Date) = vlCVX.epochs(0);
     }
 
     function setDelegate(address _delegate) external {
@@ -193,6 +198,47 @@ contract Delegation {
         uint256 endEpoch;
         unchecked { endEpoch = _startEpoch + _numEpochs; }
 
+        (uint112 _locked, , uint32 nextUnlockIndex) = vlCVX.balances(_user);
+
+        uint256[17] memory epochWeights;
+
+        if (_locked > 0) {
+            for (uint256 i = nextUnlockIndex; i < nextUnlockIndex + 16;) {
+                uint112 lockBoosted;
+                uint32 unlockTime;
+                try vlCVX.userLocks(_user, i) returns (uint112 _amount, uint112 _boosted, uint32 _unlockTime) {
+                    if (_amount > 0 && _unlockTime <= block.timestamp) revert ExpiredLocks();
+                    lockBoosted = _boosted;
+                    unlockTime = _unlockTime;
+                } catch {
+                    break;
+                }
+
+                uint256 _lockBoosted = uint256(lockBoosted);
+                uint256 _unlockTime = uint256(unlockTime);
+                uint256 lockEpochTime = _unlockTime - LOCK_DURATION;
+
+                uint256 firstContrib = (lockEpochTime - uint256(epoch0Date)) / REWARDS_DURATION;
+                uint256 lastContrib = (_unlockTime - uint256(epoch0Date)) / REWARDS_DURATION - 1;
+
+                if (lastContrib < _startEpoch) {
+                    unchecked { ++i; }
+                    continue;
+                }
+                if (firstContrib >= endEpoch) break;
+
+                uint256 eStart = firstContrib > _startEpoch ? firstContrib : _startEpoch;
+                uint256 eEnd = lastContrib < endEpoch - 1 ? lastContrib : endEpoch - 1;
+
+                for (uint256 e = eStart; e <= eEnd;) {
+                    epochWeights[e - _startEpoch] += _lockBoosted;
+                    unchecked { ++e; }
+                }
+
+                unchecked { ++i; }
+            }
+        }
+
         uint256 startEntry = _startEpoch >> 3;
         uint256 endEntry = (endEpoch - 1) >> 3;
 
@@ -211,7 +257,7 @@ contract Delegation {
             uint256 loopEnd = endEpoch < entryEndEpoch ? endEpoch : entryEndEpoch;
 
             for (uint256 epoch = loopStart; epoch < loopEnd;) {
-                uint256 newWeight = vlCVX.balanceAtEpochOf(epoch, _user);
+                uint256 newWeight = epochWeights[epoch - _startEpoch];
                 uint256 offset = epoch & 7;
                 uint256 oldWeightPacked;
                 uint256 delegateSlot;

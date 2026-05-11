@@ -144,7 +144,7 @@ contract GaugeVotePlatform is Ownable2Step {
         if (delegate != _account) {
             uint256 delWeight = delegation.userWeightAtEpochOf(epoch, _account);
             uint256 truncatedBase = (baseWeight / WEIGHT_DIVISOR) * WEIGHT_DIVISOR;
-            if (truncatedBase > delWeight) {
+            if (truncatedBase != delWeight) {
                 delegation.syncAtEpoch(_account, epoch);
             }
         }
