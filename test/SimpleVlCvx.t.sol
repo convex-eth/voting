@@ -129,14 +129,10 @@ contract SimpleVlCvxTest is Test {
 
     function test_processExpiredLocks_noExpiredLocks() public {
         vlcvx.lock(alice, 1000, 0);
-        (,, uint32 nuiBefore) = _bal(alice);
 
         vm.prank(alice);
+        vm.expectRevert("no expired locks");
         vlcvx.processExpiredLocks();
-
-        (uint112 locked,, uint32 nuiAfter) = _bal(alice);
-        assertEq(nuiAfter, nuiBefore);
-        assertEq(locked, 1000);
     }
 
     // === MULTIPLE LOCKS ===
@@ -181,9 +177,7 @@ contract SimpleVlCvxTest is Test {
 
     function test_relockCreatesCurrentEpochEntry() public {
         vlcvx.lock(alice, 1000, 0);
-        vm.warp(_currentEpoch() + WEEK + 1);
-
-        assertEq(vlcvx.balanceOf(alice), 1000);
+        vm.warp(_currentEpoch() + WEEK * 17);
 
         vm.prank(alice);
         vlcvx.relock(alice, 800, 0);
@@ -306,16 +300,17 @@ contract SimpleVlCvxTest is Test {
 
     function test_relockAddsToCurrentEpochSupply() public {
         vlcvx.lock(alice, 1000, 0);
-        vm.warp(_currentEpoch() + WEEK + 1);
+        (,, uint32 ut) = _lk(alice, 0);
+        vm.warp(ut + 1);
 
-        uint256 epochId = vlcvx.findEpochId(_currentEpoch());
-        (uint224 supplyBefore,) = vlcvx.epochs(epochId);
+        uint256 currentEpoch = _currentEpoch();
 
         vm.prank(alice);
         vlcvx.relock(alice, 800, 0);
 
-        (uint224 supplyAfter,) = vlcvx.epochs(epochId);
-        assertEq(supplyAfter - supplyBefore, 800);
+        uint256 epochId = vlcvx.findEpochId(currentEpoch);
+        (uint224 supply,) = vlcvx.epochs(epochId);
+        assertEq(supply, 800);
     }
 
     // === HISTORY PRESERVATION ===

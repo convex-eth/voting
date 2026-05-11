@@ -8,11 +8,12 @@ import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "../src/FxGaugeExecutor.sol";
 import "../src/interface/IFxGaugeVoter.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
 contract FxGaugeExecutorTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
@@ -35,10 +36,11 @@ contract FxGaugeExecutorTest is Test {
     address constant FX_GAUGE_VOTER = 0xAffe966B27ba3E4Ebb8A0eC124C7b7019CC762f8;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, gaugeController.code);
@@ -48,7 +50,7 @@ contract FxGaugeExecutorTest is Test {
 
         platform = new GaugeVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvx),
             address(gaugeRegistry),
             address(surrogateRegistry),
             address(delegation)
@@ -75,7 +77,7 @@ contract FxGaugeExecutorTest is Test {
     }
 
     function _lockAndDelegate(address user, uint256 amount, address delegateAddr) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
         if (delegateAddr != address(0)) {
             vm.prank(user);
             delegation.setDelegate(delegateAddr);

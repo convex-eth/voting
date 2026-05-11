@@ -7,7 +7,8 @@ import "../src/DaoVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/ResupplyVoteExecutor.sol";
 import "../src/SurrogateRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockVoteDelegationExtension.sol";
 
 contract ProtocolBoundaryMockResupplyStaker is IResupplyStaker {
@@ -35,7 +36,7 @@ contract DaoExecutorBoundaryFuzzTest is Test {
     address internal constant RESUPPLY_STAKER = 0xCCCCCccc94bFeCDd365b4Ee6B86108fC91848901;
     address internal constant RESUPPLY_VOTER = 0x11111111063874cE8dC6232cb5C1C849359476E6;
 
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal daoPlatform;
@@ -48,13 +49,14 @@ contract DaoExecutorBoundaryFuzzTest is Test {
     address internal operator = makeAddr("operator");
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
         daoPlatform =
-            new DaoVotePlatform(address(this), address(mockVlCVX), address(surrogateRegistry), address(delegation));
+            new DaoVotePlatform(address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
         daoPlatform.setOperator(operator, true);
 
         curveDelegate = new MockVoteDelegationExtension();
@@ -141,8 +143,8 @@ contract DaoExecutorBoundaryFuzzTest is Test {
         internal
         returns (uint256 pid)
     {
-        mockVlCVX.mockLock(alice, aliceAmount * WD, aliceAmount * WD);
-        mockVlCVX.mockLock(bob, bobAmount * WD, bobAmount * WD);
+        vlcvx.lock(alice, aliceAmount * WD, 0);
+        vlcvx.lock(bob, bobAmount * WD, 0);
         _warpToNextEpoch();
 
         uint256 startTime = block.timestamp + 1 days;

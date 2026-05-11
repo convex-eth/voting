@@ -7,11 +7,12 @@ import "../src/CurveGaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "../src/GaugeVoteHelper.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
 contract GaugeVoteHelperTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
@@ -34,10 +35,11 @@ contract GaugeVoteHelperTest is Test {
     uint256[] internal fullWeight;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
@@ -47,7 +49,7 @@ contract GaugeVoteHelperTest is Test {
 
         platform = new GaugeVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvx),
             address(gaugeRegistry),
             address(surrogateRegistry),
             address(delegation)
@@ -71,7 +73,7 @@ contract GaugeVoteHelperTest is Test {
     }
 
     function _lock(address user, uint256 amount) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
     }
 
     function _lockAndDelegate(address user, uint256 amount, address del) internal {
@@ -125,7 +127,7 @@ contract GaugeVoteHelperTest is Test {
         _nextEpoch();
 
         uint256 pid = _createProposal();
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
         _vote(alice, singleGauge, fullWeight);
 
@@ -141,7 +143,7 @@ contract GaugeVoteHelperTest is Test {
         _vote(alice, singleGauge, fullWeight);
 
         vm.warp(vm.getBlockTimestamp() + 100);
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
 
         _vote(alice, singleGauge, fullWeight);
@@ -159,10 +161,10 @@ contract GaugeVoteHelperTest is Test {
         _vote(alice, singleGauge, fullWeight);
 
         vm.warp(vm.getBlockTimestamp() + 100);
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
 
-        assertEq(_query(alice, pid), 50 * WD);
+        assertEq(_query(alice, pid), 0);
     }
 
     // === Pattern E: user does NOT vote - no relock ===
@@ -185,12 +187,12 @@ contract GaugeVoteHelperTest is Test {
 
         uint256 pid = _createProposal();
 
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
 
         _vote(delegate1, singleGauge, fullWeight);
 
-        assertEq(_query(alice, pid), 150 * WD);
+        assertEq(_query(alice, pid), 100 * WD);
     }
 
     // === Pattern G: user does NOT vote - relock/sync AFTER delegate's last vote ===
@@ -203,7 +205,7 @@ contract GaugeVoteHelperTest is Test {
         _vote(delegate1, singleGauge, fullWeight);
 
         vm.warp(vm.getBlockTimestamp() + 100);
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
 
         assertEq(_query(alice, pid), 100 * WD);
@@ -240,7 +242,7 @@ contract GaugeVoteHelperTest is Test {
         _vote(delegate1, singleGauge, fullWeight);
 
         vm.warp(vm.getBlockTimestamp() + 100);
-        mockVlCVX.mockRelock(alice, 0, 150 * WD);
+        vlcvx.lock(alice, 50 * WD, 0);
         delegation.sync(alice);
 
         address[] memory users = new address[](3);

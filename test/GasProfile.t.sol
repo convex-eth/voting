@@ -6,11 +6,12 @@ import "../src/GaugeVotePlatform.sol";
 import "../src/CurveGaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
 contract GasProfile is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
@@ -31,10 +32,11 @@ contract GasProfile is Test {
     uint256 constant WD = 1e17;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
@@ -44,7 +46,7 @@ contract GasProfile is Test {
 
         platform = new GaugeVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvx),
             address(gaugeRegistry),
             address(surrogateRegistry),
             address(delegation)
@@ -66,11 +68,11 @@ contract GasProfile is Test {
     }
 
     function _lock(address user, uint256 amount) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
     }
 
     function _lockAndDelegate(address user, uint256 amount, address delegateAddr) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
         if (delegateAddr != address(0)) {
             vm.prank(user);
             delegation.setDelegate(delegateAddr);

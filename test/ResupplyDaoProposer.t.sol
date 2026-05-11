@@ -6,7 +6,8 @@ import "../src/ResupplyDaoProposer.sol";
 import "../src/DaoVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract MockResupplyVoting is IResupplyVoting {
     struct Proposal {
@@ -54,7 +55,7 @@ contract MockResupplyVoting is IResupplyVoting {
 }
 
 contract ResupplyDaoProposerTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal daoVotePlatform;
@@ -65,15 +66,16 @@ contract ResupplyDaoProposerTest is Test {
     address constant RESUPPLY_VOTING = 0x11111111063874cE8dC6232cb5C1C849359476E6;
 
     function setUp() public {
-        vm.warp(1_000_000);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         daoVotePlatform = new DaoVotePlatform(
             owner,
-            address(mockVlCVX),
+            address(vlcvx),
             address(surrogateRegistry),
             address(delegation)
         );

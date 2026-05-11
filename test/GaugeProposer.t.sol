@@ -7,10 +7,11 @@ import "../src/GaugeVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/CurveGaugeRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract GaugeProposerTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     CurveGaugeRegistry internal gaugeRegistry;
@@ -23,17 +24,18 @@ contract GaugeProposerTest is Test {
     uint256 constant WEEK = 86400 * 7;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700697600);
 
-        mockVlCVX = new MockVlCVX();
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
 
-        delegation = new Delegation(address(mockVlCVX));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
         gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
 
         gaugeVotePlatform = new GaugeVotePlatform(
             owner,
-            address(mockVlCVX),
+            address(vlcvx),
             address(gaugeRegistry),
             address(surrogateRegistry),
             address(delegation)
@@ -41,7 +43,7 @@ contract GaugeProposerTest is Test {
 
         gaugeVotePlatform.setOperator(operator, true);
 
-        proposer = new GaugeProposer(owner, address(mockVlCVX), address(gaugeVotePlatform));
+        proposer = new GaugeProposer(owner, address(vlcvx), address(gaugeVotePlatform));
         gaugeVotePlatform.setOperator(address(proposer), true);
     }
 
@@ -52,8 +54,8 @@ contract GaugeProposerTest is Test {
 
         proposer.proposeVote();
 
-        uint256 currentEpoch = mockVlCVX.epochCount() - 2;
-        (, uint32 epochStart) = mockVlCVX.epochs(currentEpoch);
+        uint256 currentEpoch = vlcvx.epochCount() - 2;
+        (, uint32 epochStart) = vlcvx.epochs(currentEpoch);
 
         (uint256 s, uint256 e,) = gaugeVotePlatform.proposals(pid);
         assertEq(s, uint256(epochStart));
@@ -68,7 +70,7 @@ contract GaugeProposerTest is Test {
 
         proposer.proposeVote();
 
-        assertEq(proposer.lastEpochUsed(), mockVlCVX.epochCount());
+        assertEq(proposer.lastEpochUsed(), vlcvx.epochCount());
     }
 
     function test_cannotProposeTwiceSameEpoch() public {
@@ -82,9 +84,9 @@ contract GaugeProposerTest is Test {
 
     function test_cannotProposeOnOddEpoch() public {
         vm.warp(block.timestamp + WEEK);
-        mockVlCVX.checkpointEpoch();
+        vlcvx.checkpointEpoch();
 
-        assertEq(mockVlCVX.epochCount() % 2, 1);
+        assertEq(vlcvx.epochCount() % 2, 1);
 
         vm.expectRevert("Must be even epoch (bi-weekly)");
         proposer.proposeVote();
@@ -100,8 +102,8 @@ contract GaugeProposerTest is Test {
 
         proposer.proposeVote();
 
-        uint256 currentEpoch = mockVlCVX.epochCount() - 2;
-        (, uint32 epochStart) = mockVlCVX.epochs(currentEpoch);
+        uint256 currentEpoch = vlcvx.epochCount() - 2;
+        (, uint32 epochStart) = vlcvx.epochs(currentEpoch);
 
         (uint256 s, uint256 e,) = gaugeVotePlatform.proposals(pid);
         assertEq(s, uint256(epochStart));

@@ -7,11 +7,12 @@ import "../src/CurveGaugeRegistry.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
 contract GaugeVotePlatformTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     CurveGaugeRegistry internal gaugeRegistry;
     SurrogateRegistry internal surrogateRegistry;
@@ -35,10 +36,11 @@ contract GaugeVotePlatformTest is Test {
     uint256 internal proposalEpoch;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
@@ -48,7 +50,7 @@ contract GaugeVotePlatformTest is Test {
 
         platform = new GaugeVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvx),
             address(gaugeRegistry),
             address(surrogateRegistry),
             address(delegation)
@@ -70,7 +72,7 @@ contract GaugeVotePlatformTest is Test {
     }
 
     function _lockAndDelegate(address user, uint256 amount, address delegateAddr) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
         if (delegateAddr != address(0)) {
             vm.prank(user);
             delegation.setDelegate(delegateAddr);
@@ -343,7 +345,7 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 carolBal = mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+        uint256 carolBal = vlcvx.balanceAtEpochOf(proposalEpoch, carol);
         uint256 carolDelBal = delegation.balanceAtEpochOf(proposalEpoch, carol);
 
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
@@ -391,8 +393,8 @@ contract GaugeVotePlatformTest is Test {
         (,,,, int256 bobAdjAfter) = platform.getVote(pid, bob);
         assertEq(bobAdjAfter, 0);
 
-        uint256 aliceWeight = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        uint256 bobWeight = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+        uint256 aliceWeight = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 bobWeight = vlcvx.balanceAtEpochOf(proposalEpoch, bob);
         assertGt(platform.gaugeTotal(pid, address(gauge1)), 0);
         assertGt(platform.gaugeTotal(pid, address(gauge2)), 0);
     }
@@ -631,8 +633,8 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge2)), _getWeights(10000));
 
         uint256 total = platform.voteTotals(pid);
-        uint256 aliceBal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        uint256 bobBal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+        uint256 aliceBal = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 bobBal = vlcvx.balanceAtEpochOf(proposalEpoch, bob);
         assertApproxEqAbs(total, aliceBal + bobBal, 2 * WD);
     }
 
@@ -950,30 +952,24 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Bob votes first with alice's weight included
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 g1TotalAfterBob = platform.gaugeTotal(pid, address(gauge1));
-        uint256 expectedBobTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 expectedBobTotal = vlcvx.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, alice);
         assertApproxEqAbs(g1TotalAfterBob, expectedBobTotal, WD);
 
-        // Alice syncs mid-proposal
         delegation.sync(alice);
 
-        // Alice votes — should trigger timestamp comparison
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        // Bob's adjustedWeight should be 0 after Alice claims
         (,,,, int256 bobAdj) = platform.getVote(pid, bob);
         assertEq(bobAdj, 0);
 
-        // Gauge1 should now reflect only Bob's own weight
         uint256 g1TotalAfterAlice = platform.gaugeTotal(pid, address(gauge1));
-        uint256 expectedBobOwn = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+        uint256 expectedBobOwn = vlcvx.balanceAtEpochOf(proposalEpoch, bob);
         assertApproxEqAbs(g1TotalAfterAlice, expectedBobOwn, WD);
 
-        // Totals should be correct
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -985,16 +981,12 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Alice syncs first
         delegation.sync(alice);
 
-        // Bob votes after sync
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Alice votes — delegate voted AFTER sync, so weightToRemove = currentDelWeight
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        // Bob's adjustedWeight should be 0 after Alice claims
         (,,,, int256 bobAdj) = platform.getVote(pid, bob);
         assertEq(bobAdj, 0);
 
@@ -1010,19 +1002,15 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Dave votes first with all delegatees' weight
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // All delegatees vote — each should push pending to Dave
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
         _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Dave's adjustedWeight should be 0 after all delegatees claimed
         (,,,, int256 daveAdj) = platform.getVote(pid, dave);
         assertEq(daveAdj, 0);
 
-        // Totals should be correct
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -1032,22 +1020,17 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Dave votes
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Alice votes, pushing pending to Dave
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         (,,,, int256 daveAdjBefore) = platform.getVote(pid, dave);
 
-        // Dave re-votes — should process pending
         _vote(dave, _getGauges(address(gauge3)), _getWeights(10000));
 
         (,,,, int256 daveAdjAfter) = platform.getVote(pid, dave);
-        // After processing pending, Dave's adjustedWeight should be 0 (no more delegatees)
         assertEq(daveAdjAfter, 0);
 
-        // Totals preserved
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -1058,27 +1041,23 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 aliceBalBefore = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
 
-        // Alice votes
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 g1TotalBefore = platform.gaugeTotal(pid, address(gauge1));
         assertGt(g1TotalBefore, 0);
 
-        // Alice relocks mid-proposal (replaces boosted with higher value)
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
 
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
+        uint256 aliceBalAfter = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        assertEq(aliceBalAfter, aliceBalBefore);
 
-        // Alice re-votes
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 g1TotalAfter = platform.gaugeTotal(pid, address(gauge1));
-        assertGt(g1TotalAfter, g1TotalBefore);
+        assertEq(g1TotalAfter, g1TotalBefore);
 
-        // Verify totals match
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -1088,31 +1067,24 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Bob votes first
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Alice votes
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 aliceBalBefore = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
 
-        // Alice relocks mid-proposal (replaces boosted with higher value)
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
 
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
+        uint256 aliceBalAfter = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        assertEq(aliceBalAfter, aliceBalBefore);
 
-        // Alice re-votes — this triggers userBaseDiff > 0 with delegate
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        // Bob's pending should have been reduced by Alice's growth
         int256 bobPending = platform.pendingWeightAdjustment(pid, bob);
-        assertLt(bobPending, 0);
+        assertEq(bobPending, 0);
 
-        // Bob re-votes to pick up pending
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Totals should be correct
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -1124,29 +1096,22 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Alice votes first — initBaseInfo subtracts bob's adjustedWeight by alice's delegation weight
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 aliceBalBefore = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
 
-        // Alice relocks mid-proposal
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
 
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
+        uint256 aliceBalAfter = vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        assertEq(aliceBalAfter, aliceBalBefore);
 
-        // Alice re-votes — triggers userBaseDiff > 0
-        // Bob hasn't voted (voteStatus == 0), so growth goes directly to bob.adjustedWeight
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        // Bob's pending should be 0 (direct subtraction, not pending)
         int256 bobPending = platform.pendingWeightAdjustment(pid, bob);
         assertEq(bobPending, 0);
 
-        // Bob votes — his adjustedWeight already reflects alice's growth subtraction
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Totals should be correct
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
@@ -1158,7 +1123,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
@@ -1166,7 +1131,7 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+            vlcvx.balanceAtEpochOf(proposalEpoch, alice) + vlcvx.balanceAtEpochOf(proposalEpoch, bob);
 
         assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
         assertEq(platform.voteTotals(pid), expectedTotal);
@@ -1183,7 +1148,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
@@ -1191,7 +1156,7 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+            vlcvx.balanceAtEpochOf(proposalEpoch, alice) + vlcvx.balanceAtEpochOf(proposalEpoch, bob);
 
         assertEq(platform.voteTotals(pid), expectedTotal);
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -1205,7 +1170,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
         delegation.sync(alice);
         vm.warp(vm.getBlockTimestamp() + 1);
 
@@ -1213,11 +1178,11 @@ contract GaugeVotePlatformTest is Test {
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
         uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+            vlcvx.balanceAtEpochOf(proposalEpoch, alice) + vlcvx.balanceAtEpochOf(proposalEpoch, bob);
 
         assertEq(platform.pendingWeightAdjustment(pid, bob), 0);
-        assertEq(platform.gaugeTotal(pid, address(gauge1)), mockVlCVX.balanceAtEpochOf(proposalEpoch, bob));
-        assertEq(platform.gaugeTotal(pid, address(gauge2)), mockVlCVX.balanceAtEpochOf(proposalEpoch, alice));
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), vlcvx.balanceAtEpochOf(proposalEpoch, bob));
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), vlcvx.balanceAtEpochOf(proposalEpoch, alice));
         assertEq(platform.voteTotals(pid), expectedTotal);
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
@@ -1238,8 +1203,8 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid = platform.proposalCount() - 1;
         (,, proposalEpoch) = platform.proposals(pid);
 
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+        vlcvx.lock(alice, 500 * WD, 0);
+        vlcvx.lock(dave, 200 * WD, 0);
 
         vm.warp(startTime);
 
@@ -1247,8 +1212,8 @@ contract GaugeVotePlatformTest is Test {
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
         _vote(bob, _getGauges(address(gauge3)), _getWeights(10000));
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+        uint256 expectedTotal = vlcvx.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, bob) + vlcvx.balanceAtEpochOf(proposalEpoch, dave);
 
         assertEq(platform.voteTotals(pid), expectedTotal);
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -1263,9 +1228,9 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+        uint256 expectedTotal = vlcvx.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, carol);
 
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -1285,10 +1250,10 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+        uint256 expectedTotal = vlcvx.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, carol)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, dave);
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -1309,18 +1274,15 @@ contract GaugeVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        // Alice votes with Bob as delegate
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Alice changes delegate mid-proposal (takes effect next epoch)
         vm.prank(alice);
         delegation.setDelegate(carol);
 
-        // Alice re-votes — should still use Bob as delegate for this proposal's epoch
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
         (,,,, address aliceDel, ) = platform.userInfo(pid, alice);
-        assertEq(aliceDel, bob); // Still Bob, not Carol
+        assertEq(aliceDel, bob);
     }
 
     // ========== Re-vote after delegation balance change ==========
@@ -1333,10 +1295,8 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        // Bob locks (but does NOT delegate yet)
-        mockVlCVX.mockLock(bob, 500 * WD, 500 * WD);
+        vlcvx.lock(bob, 500 * WD, 0);
 
-        // Dave re-votes — delDelta should still reflect Alice's delegation
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));

@@ -62,7 +62,7 @@ contract DelegationTest is Test {
 
     function _processExpired(address user) internal {
         vm.prank(user);
-        simpleVlCvx(address(vlcvx)).processExpiredLocks();
+        try simpleVlCvx(address(vlcvx)).processExpiredLocks() {} catch {}
     }
 
     function _assertWeightEq(uint256 epoch, address delegate, uint256 expected) internal {

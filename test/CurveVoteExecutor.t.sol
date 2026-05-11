@@ -7,11 +7,12 @@ import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "../src/CurveVoteExecutor.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockVoteDelegationExtension.sol";
 
 contract CurveVoteExecutorTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal dao;
@@ -27,15 +28,16 @@ contract CurveVoteExecutorTest is Test {
     uint256 constant WD = 1e17;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         dao = new DaoVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvx),
             address(surrogateRegistry),
             address(delegation)
         );
@@ -48,7 +50,7 @@ contract CurveVoteExecutorTest is Test {
     }
 
     function _lockAndDelegate(address user, uint256 amount, address delegateAddr) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvx.lock(user, amount * WD, 0);
         if (delegateAddr != address(0)) {
             vm.prank(user);
             delegation.setDelegate(delegateAddr);

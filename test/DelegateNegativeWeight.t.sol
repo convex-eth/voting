@@ -7,7 +7,8 @@ import "../src/GaugeVotePlatform.sol";
 import "../src/CurveGaugeRegistry.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
 contract VotingActor {
@@ -41,7 +42,7 @@ contract DelegateNegativeWeightTest is Test {
     uint256 constant WEEK = 7 days;
     address constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
 
-    MockVlCVX mockVlCVX;
+    IvlCVX vlcvx;
     Delegation delegation;
     SurrogateRegistry surrogateRegistry;
     CurveGaugeRegistry gaugeRegistry;
@@ -63,19 +64,20 @@ contract DelegateNegativeWeightTest is Test {
     address operator = address(0xAA01);
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(CURVE_GAUGE_CONTROLLER, gaugeController.code);
         gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
 
-        dao = new DaoVotePlatform(address(this), address(mockVlCVX), address(surrogateRegistry), address(delegation));
+        dao = new DaoVotePlatform(address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
         gaugePlatform = new GaugeVotePlatform(
-            address(this), address(mockVlCVX), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
+            address(this), address(vlcvx), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
         );
         dao.setOperator(operator, true);
         gaugePlatform.setOperator(operator, true);
@@ -95,9 +97,9 @@ contract DelegateNegativeWeightTest is Test {
         actorNames[2] = "D";
         delegateDAddr = address(delegateD);
 
-        mockVlCVX.mockLock(actorAddrs[0], 600 * WD, 600 * WD);
-        mockVlCVX.mockLock(actorAddrs[1], 600 * WD, 600 * WD);
-        mockVlCVX.mockLock(actorAddrs[2], 200 * WD, 200 * WD);
+        vlcvx.lock(actorAddrs[0], 600 * WD, 0);
+        vlcvx.lock(actorAddrs[1], 600 * WD, 0);
+        vlcvx.lock(actorAddrs[2], 200 * WD, 0);
 
         actorA.setSurrogate(surrogateRegistry, address(surrogateA));
         actorB.setSurrogate(surrogateRegistry, address(surrogateB));
@@ -138,7 +140,7 @@ contract DelegateNegativeWeightTest is Test {
 
     function _dumpState(string memory label, uint256 daoPid) internal {
         (,, uint48 epoch,,) = dao.proposals(daoPid);
-        uint256 epochCount = mockVlCVX.epochCount();
+        uint256 epochCount = vlcvx.epochCount();
 
         emit log_string("");
         emit log_string("========================================================");
@@ -152,7 +154,7 @@ contract DelegateNegativeWeightTest is Test {
         for (uint256 i = 0; i < 3; i++) {
             emit log_named_string("  User", actorNames[i]);
             for (uint256 e = 0; e < epochCount; e++) {
-                uint256 bal = mockVlCVX.balanceAtEpochOf(e, actorAddrs[i]);
+                uint256 bal = vlcvx.balanceAtEpochOf(e, actorAddrs[i]);
                 if (bal > 0) {
                     emit log_named_uint("    epoch", e);
                     emit log_named_uint("      balance", bal);
@@ -256,12 +258,12 @@ contract DelegateNegativeWeightTest is Test {
 
     function test_crossPlatformSyncMismatch() public {
         (uint256 daoPid, uint256 gaugePid) = _createProposal();
-        _dumpState("After createProposal (A=100e18, B=60e18, D=20e18)", daoPid);
+        _dumpState("After createProposal (A=60e18, B=60e18, D=20e18)", daoPid);
 
         // Step 1: D votes DAO first
-        // Delegation income = A(100e18) + B(60e18) = 160e18
+        // Delegation income = A(60e18) + B(60e18) = 120e18
         delegateD.daoVote(dao, delegateDAddr, 4443, 5557);
-        _dumpState("After D votes DAO (adj should be +160e18)", daoPid);
+        _dumpState("After D votes DAO (adj should be +120e18)", daoPid);
 
         // Step 2: A votes GAUGE (no relock, same epoch - just a normal vote)
         address[] memory g = new address[](3);

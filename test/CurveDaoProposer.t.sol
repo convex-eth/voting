@@ -7,7 +7,8 @@ import "../src/VotingRegistry.sol";
 import "../src/DaoVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract MockCurveVoting is ICurveVoting {
     struct Vote {
@@ -58,7 +59,7 @@ contract MockCurveVoting is ICurveVoting {
 }
 
 contract CurveDaoProposerTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal daoVotePlatform;
@@ -76,17 +77,18 @@ contract CurveDaoProposerTest is Test {
     uint256 constant WEEK = 86400 * 7;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         registry = new VotingRegistry(owner);
 
         daoVotePlatform = new DaoVotePlatform(
             owner,
-            address(mockVlCVX),
+            address(vlcvx),
             address(surrogateRegistry),
             address(delegation)
         );

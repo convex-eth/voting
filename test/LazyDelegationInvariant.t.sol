@@ -7,8 +7,9 @@ import "../src/DaoVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/GaugeVotePlatform.sol";
 import "../src/SurrogateRegistry.sol";
+import "../src/interface/IvlCVX.sol";
 import "./mocks/MockGauges.sol";
-import "./mocks/MockVlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract VotingActor {
     function setSurrogate(SurrogateRegistry registry, address surrogate) external {
@@ -39,7 +40,7 @@ contract LazyDelegationHandler is Test {
     uint256 internal constant WD = 1e17;
     address internal constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
 
-    MockVlCVX public mockVlCVX;
+    IvlCVX public vlcvx;
     Delegation public delegation;
     SurrogateRegistry public surrogateRegistry;
     CurveGaugeRegistry public gaugeRegistry;
@@ -67,19 +68,20 @@ contract LazyDelegationHandler is Test {
     bool public gaugeSurrogateOverrideBroken;
 
     constructor() {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(CURVE_GAUGE_CONTROLLER, gaugeController.code);
 
         gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
-        dao = new DaoVotePlatform(address(this), address(mockVlCVX), address(surrogateRegistry), address(delegation));
+        dao = new DaoVotePlatform(address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
         gaugePlatform = new GaugeVotePlatform(
-            address(this), address(mockVlCVX), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
+            address(this), address(vlcvx), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
         );
         dao.setOperator(operator, true);
         gaugePlatform.setOperator(operator, true);
@@ -94,8 +96,8 @@ contract LazyDelegationHandler is Test {
         address user = actors[index];
         address delegate = _delegateTarget(delegateSeed);
 
-        mockVlCVX.checkpointEpoch();
-        uint256 currentEpoch = mockVlCVX.epochCount() - 2;
+        vlcvx.checkpointEpoch();
+        uint256 currentEpoch = vlcvx.epochCount() - 2;
         address beforeDelegate = delegation.getDelegateAtEpoch(user, currentEpoch);
 
         actorProxies[index].setDelegate(delegation, delegate);
@@ -115,11 +117,8 @@ contract LazyDelegationHandler is Test {
         uint256 index = _actorIndex(userSeed);
         uint256 delta = bound(amountSeed, 1, 500) * WD;
         boostedWeights[index] += delta;
-        try mockVlCVX.mockRelock(actors[index], 0, boostedWeights[index]) {
-            _refreshSupplyCaps();
-        } catch {
-            boostedWeights[index] -= delta;
-        }
+        vlcvx.lock(actors[index], delta, 0);
+        _refreshSupplyCaps();
         _tick();
     }
 
@@ -279,7 +278,7 @@ contract LazyDelegationHandler is Test {
             surrogates[i] = address(surrogateProxies[i]);
 
             boostedWeights[i] = initialWeights[i];
-            mockVlCVX.mockLock(actors[i], initialWeights[i], initialWeights[i]);
+            vlcvx.lock(actors[i], initialWeights[i], 0);
 
             actorProxies[i].setSurrogate(surrogateRegistry, surrogates[i]);
 
@@ -379,7 +378,7 @@ contract LazyDelegationHandler is Test {
 
     function _knownSupplyAtEpoch(uint256 epoch) internal view returns (uint256 total) {
         for (uint256 i = 0; i < ACTOR_COUNT;) {
-            total += mockVlCVX.balanceAtEpochOf(epoch, actors[i]);
+            total += vlcvx.balanceAtEpochOf(epoch, actors[i]);
             unchecked {
                 ++i;
             }

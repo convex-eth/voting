@@ -6,10 +6,11 @@ import "../src/GenericDaoProposer.sol";
 import "../src/DaoVotePlatform.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
-import "./mocks/MockVlCVX.sol";
+import "../src/interface/IvlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract GenericDaoProposerTest is Test {
-    MockVlCVX internal mockVlCVX;
+    IvlCVX internal vlcvx;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal daoVotePlatform;
@@ -20,15 +21,16 @@ contract GenericDaoProposerTest is Test {
     address internal notWhitelisted = makeAddr("notWhitelisted");
 
     function setUp() public {
-        vm.warp(1_000_000);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        simpleVlCvx impl = new simpleVlCvx();
+        vlcvx = IvlCVX(address(impl));
+        delegation = new Delegation(address(vlcvx));
         surrogateRegistry = new SurrogateRegistry();
 
         daoVotePlatform = new DaoVotePlatform(
             owner,
-            address(mockVlCVX),
+            address(vlcvx),
             address(surrogateRegistry),
             address(delegation)
         );
