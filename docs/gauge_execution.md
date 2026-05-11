@@ -1,51 +1,83 @@
-# GaugeExecutor: Gauge Weight Execution
+# Gauge Executors: Gauge Weight Execution
 
 ## Overview
 
-GaugeExecutor takes a finalized proposal's vote results from GaugeVotePlatform and executes gauge weight changes on Curve's Gauge Controller via the VoteDelegateExtension contract at `0x5349ffba494aC3c888ffa16fD438F44B8c67fB07`.
+`CurveGaugeExecutor` and `FxGaugeExecutor` take finalized `GaugeVotePlatform` proposal results and submit gauge weights to the relevant external gauge voting system.
 
-## How It Works
+| Executor | External target |
+|---|---|
+| `CurveGaugeExecutor` | Convex `VoteDelegateExtension.GaugeVote(gauges, weights)` |
+| `FxGaugeExecutor` | F(x) gauge voter `voteGaugeWeight(gaugeController, gauges, weights)` |
 
-1. After a proposal is finalized (`isFinalized(proposalId) == true`), an operator calls `executeGaugeVote(proposalId, gauges)`
-2. The contract verifies the proposal is finalized and is the most recent proposal
-3. For each gauge in the input array, the contract calculates the basis point weight from GaugeVotePlatform's stored totals
-4. The gauges and calculated weights are submitted to VoteDelegateExtension, which calls Curve's `GaugeController.vote_for_gauge_weights` for each gauge
+Both executors use the same local accounting model for submitted gauge count and submitted BPS weight.
+
+## Execution Flow
+
+1. Caller invokes `executeGaugeVote(proposalId, gauges)`.
+2. Executor requires the proposal to be finalized and the latest proposal.
+3. Executor checks that the proposal epoch has not expired.
+4. For each caller-supplied gauge, executor calculates an outbound BPS weight from `GaugeVotePlatform`.
+5. Executor updates local `ExecutionState`.
+6. Executor submits the gauge/weight arrays to the external adapter.
+7. If the external call reverts, the local state update reverts with it.
 
 ## Weight Calculation
 
 For each gauge:
-```
-weight = gaugeTotal(proposalId, gauge) * 10000 / voteTotals(proposalId)
+
+```solidity
+weight = gaugeTotal(proposalId, gauge) * 10000 / voteTotals(proposalId);
 ```
 
-This produces a basis point value (0-10000). Gauges not present in the proposal get weight 0.
+This produces a basis point value from 0 to 10000. Gauges not present in the current proposal get weight 0, which is useful for clearing previous-round external allocations.
+
+## State Tracking
+
+Each executor stores:
+
+```solidity
+struct ExecutionState {
+    uint128 gaugeCount;
+    uint128 weight;
+}
+```
+
+- `submittedGaugeCount(proposalId)` returns `gaugeCount`.
+- `submittedWeight(proposalId)` returns `weight`.
+- `isDone(proposalId)` returns true when the proposal is finalized and `gaugeCount == votePlatform.getGaugeCount(proposalId)`.
+
+`gaugeCount` is incremented for each submitted calldata entry whose computed outbound BPS weight is greater than zero. It is not a unique gauge-address counter. The executor does not locally deduplicate a batch and does not remember which specific gauges were already submitted.
+
+## Rounding And Final Padding
+
+Integer division can leave the sum of independently calculated weights below 10000. The current executors track submitted weight across batches and, when a batch makes `newCount >= votePlatform.getGaugeCount(proposalId)` with `newWeight < 10000`, add the residual BPS to the last nonzero gauge in that batch.
+
+This means the final nonzero submitted gauge can be padded to make the tracked submitted weight equal 10000. A tiny positive local gauge total can still round to zero outbound BPS; in current code, that entry does not increment `submittedGaugeCount`.
 
 ## Caller Responsibilities
 
-The contract calculates weights — the caller only provides the list of gauges. However, the caller is responsible for:
+The caller provides the gauge array. The safest batch source for positive-current-proposal gauges is the canonical list exposed by:
 
-- **Correct ordering**: Gauges must be sorted so that decreases (weight 0) are processed before increases. If not sorted correctly, Curve's GaugeController will revert because the running total would exceed 10,000 bps.
-- **No duplicates**: Submitting the same gauge twice causes a revert from Curve's GaugeController.
-- **Previous round gauges**: Gauges that received votes in a previous round but are absent from the current proposal must be included so their weight is set to 0, clearing the previous allocation.
-- **Completeness**: If a previously-voted gauge is omitted, it retains its old weight until the 10-day vote lock on Curve's side expires.
+- `votePlatform.getGaugeCount(proposalId)`
+- `votePlatform.getGaugeEntry(proposalId, index)`
 
-## Validation via Reverts
+Execution callers must ensure:
 
-The contract relies on natural reverts rather than local validation:
+- **Completeness**: include every positive-vote gauge from the canonical current proposal list.
+- **No duplicates**: do not submit the same positive-vote gauge twice in one batch.
+- **No resubmissions**: do not submit a positive-vote gauge that was already included in an earlier successful batch.
+- **Previous round cleanup**: include gauges with previous external allocations but zero current proposal weight when they need to be cleared.
+- **External ordering**: for systems that enforce running power or vote-lock constraints, order decreases and zero-weight clears before increases.
 
-| Condition | What Reverts |
+Duplicate or already-submitted positive gauges are not rejected locally. If an external adapter accepts the calldata, the executor's current state accounting can overcount progress. If the adapter reverts, the local accounting update is rolled back.
+
+## Validation Via Reverts
+
+| Condition | What reverts |
 |---|---|
 | Proposal not finalized | `NotFinalized` custom error |
-| Proposal not the latest | `NotLatestProposal` custom error |
-| `voteTotals == 0` (no votes) | Division by zero panic |
-| Duplicate gauge | Curve's GaugeController reverts |
-| Incorrect sort order | Curve's GaugeController reverts (running total > 10000) |
-| Vote locked (10-day) | Curve's GaugeController reverts |
-
-## Design Notes
-
-### Rounding Dust
-
-Because each gauge weight is calculated independently via integer division (`gaugeTotal * 10000 / voteTotals`), the sum of all weights may be 9,999 instead of 10,000. The difference is at most `N - 1` basis points where N is the number of gauges, which is negligible for Curve gauge allocation purposes.
-
-If exact 10,000 is desired, the contract could track the cumulative weight across executions and bump the last gauge by the residual (e.g. if 9,999 has been distributed so far, the final gauge gets `calculatedWeight + 1`). This would require per-execution state tracking (count of gauges processed, running weight total). The current implementation opts for simplicity — the ~1 bps dust is immaterial.
+| Proposal not latest | `NotLatestProposal` custom error |
+| Proposal epoch expired | `EpochExpired` custom error |
+| `voteTotals == 0` | Division by zero panic |
+| Bad external ordering, vote locks, or adapter auth failure | External adapter/controller revert |
+| Duplicate or already-submitted gauge | Not checked locally; may revert downstream depending on the adapter |

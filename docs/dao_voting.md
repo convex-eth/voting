@@ -9,14 +9,14 @@ DaoVotePlatform is a yes/no DAO voting contract for vlCVX holders and their dele
 | Contract | Role |
 |---|---|
 | **vlCVX** (`IvlCVX`) | Base voting weight via `balanceAtEpochOf(epoch, user)` |
-| **Delegation** | Delegate addresses, aggregated weight data, and `sync()` |
+| **Delegation** | Delegate addresses, aggregated weight data, and `sync()` / `syncAtEpoch()` |
 | **SurrogateRegistry** | Allows registered surrogates to vote on behalf of another address |
 
 No CurveGaugeRegistry — there are no gauges to validate.
 
 ## Proposals
 
-- Created by operators via `createProposal(startTime, endTime, voteType, proposalId)`, same 3-6 day duration constraint as GaugeVotePlatform
+- Created by operators via `createProposal(startTime, endTime, voteType, proposalId)`, same 1-6 day duration constraint as GaugeVotePlatform
 - Each proposal records an epoch: `vlCVX.checkpointEpoch()` then `epoch = vlCVX.epochCount() - 2`
 - A new proposal cannot be created until the previous proposal's `endTime + finalizationTime` has passed
 - The `proposalId` is an external reference ID (e.g. a snapshot hash, forum post ID, or off-chain governance identifier) that gets passed through to `VoteExecutor` and ultimately to `IVoteDelegationExtension.DaoVoteWithWeights()` as the `_voteId` parameter. This allows the on-chain vote to be linked back to its off-chain proposal context.
@@ -61,11 +61,11 @@ Identical to GaugeVotePlatform. See `gauge_voting.md` — Delegation Depth, Weig
 
 ### vote(_account, _yesWeight, _noWeight)
 
-Called by the user directly or by their registered surrogate. Weights are in basis points (0-10000) and must satisfy `_yesWeight + _noWeight <= 10000`. A pure yes vote is `(10000, 0)`, a pure no vote is `(0, 10000)`, and a split vote like `(6000, 4000)` allocates 60% to yes and 40% to no.
+Called by the user directly or by their registered surrogate. Weights are in basis points and must satisfy `_yesWeight + _noWeight == 10000`. A pure yes vote is `(10000, 0)`, a pure no vote is `(0, 10000)`, and a split vote like `(6000, 4000)` allocates 60% to yes and 40% to no.
 
 **Pre-vote checks:**
 - Proposal must be active: `startTime <= block.timestamp <= endTime`
-- `_yesWeight + _noWeight <= max_weight (10000)`
+- `_yesWeight + _noWeight == max_weight (10000)`
 - Caller must be `_account` or their registered surrogate
 - If `_account` has `Voted` status, a surrogate cannot override
 - Effective voting weight (`baseWeight + adjustedWeight`) must be > 0
@@ -130,7 +130,7 @@ VoteTotals { uint128 yes; uint128 no; }
 | CurveGaugeRegistry | Required | Not needed |
 | Overtime | 10-min extension for equalizer accounts | Replaced by 12-hour finalization window |
 | Equalizer accounts | Yes | No |
-| Max weight check | `sum(weights) <= 10000` | `yesWeight + noWeight <= 10000` |
+| Max weight check | `sum(weights) == 10000` | `yesWeight + noWeight == 10000` |
 | Delegate weight removal | Loop through gauge allocations, adjust proportionally | Single `_changeVoteTotals` call, distributed by yes/no split |
 | Gas per vote | ~260k (1 gauge) to ~430k (3 gauges) | Significantly less — no gauge array, no per-gauge total updates |
 | Execution | GaugeExecutor | VoteExecutor |
