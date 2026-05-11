@@ -304,4 +304,103 @@ contract GasProfile is Test {
         vm.prank(carol);
         platform.vote(carol, _gauges1(address(gauge3)), _weights1(10000));
     }
+
+    // ──────────────────────────────────────────────────────
+    // Profile: Delegation._syncUser (setDelegate triggers it)
+    // ──────────────────────────────────────────────────────
+
+    function test_gas_syncUser_1lock() public {
+        _lock(alice, 1000);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+    }
+
+    function test_gas_syncUser_2locks() public {
+        _lock(alice, 1000);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+    }
+
+    function test_gas_syncUser_3locks() public {
+        _lock(alice, 1000);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        _warpToNextEpoch();
+        _lock(alice, 300);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+    }
+
+    function test_gas_syncUser_resync_1lock() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _warpToNextEpoch();
+        delegation.sync(alice);
+    }
+
+    function test_gas_syncUser_resync_2locks() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        delegation.sync(alice);
+    }
+
+    function test_gas_isolated_setDelegate_1lock() public {
+        _lock(alice, 1000);
+        uint256 g = gasleft();
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        console.log("setDelegate 1 lock:", g - gasleft());
+    }
+
+    function test_gas_isolated_setDelegate_2locks() public {
+        _lock(alice, 1000);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        uint256 g = gasleft();
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        console.log("setDelegate 2 locks:", g - gasleft());
+    }
+
+    function test_gas_isolated_setDelegate_3locks() public {
+        _lock(alice, 1000);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        _warpToNextEpoch();
+        _lock(alice, 300);
+        uint256 g = gasleft();
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        console.log("setDelegate 3 locks:", g - gasleft());
+    }
+
+    function test_gas_isolated_sync_1lock() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _warpToNextEpoch();
+        uint256 g = gasleft();
+        delegation.sync(alice);
+        console.log("sync 1 lock:", g - gasleft());
+    }
+
+    function test_gas_isolated_sync_2locks() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        uint256 g = gasleft();
+        delegation.sync(alice);
+        console.log("sync 2 locks:", g - gasleft());
+    }
+
+    function test_gas_isolated_sync_3locks() public {
+        _lockAndDelegate(alice, 1000, bob);
+        _warpToNextEpoch();
+        _lock(alice, 500);
+        _warpToNextEpoch();
+        _lock(alice, 300);
+        uint256 g = gasleft();
+        delegation.sync(alice);
+        console.log("sync 3 locks:", g - gasleft());
+    }
 }

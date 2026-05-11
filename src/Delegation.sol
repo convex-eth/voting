@@ -136,6 +136,12 @@ contract Delegation {
     function syncAtEpoch(address _user, uint256 _epoch) external {
         if (_epoch >= vlCVX.epochCount() - 1) return;
 
+        (uint112 _locked, , uint32 nextUnlockIndex) = vlCVX.balances(_user);
+        if (_locked > 0) {
+            (uint112 firstAmount, , uint32 firstUnlockTime) = vlCVX.userLocks(_user, nextUnlockIndex);
+            if (firstAmount > 0 && firstUnlockTime <= block.timestamp) revert ExpiredLocks();
+        }
+
         SetDelegateRecord[] storage history = delegateHistory[_user];
         uint256 len = history.length;
         if (len == 0) return;
