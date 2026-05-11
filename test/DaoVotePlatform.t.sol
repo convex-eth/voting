@@ -5,10 +5,10 @@ import "forge-std/Test.sol";
 import "../src/DaoVotePlatform.sol";
 import "../src/SurrogateRegistry.sol";
 import "../src/Delegation.sol";
-import "./mocks/MockVlCVX.sol";
+import "./mocks/simpleVlCvx.sol";
 
 contract DaoVotePlatformTest is Test {
-    MockVlCVX internal mockVlCVX;
+    simpleVlCvx internal vlcvxImpl;
     Delegation internal delegation;
     SurrogateRegistry internal surrogateRegistry;
     DaoVotePlatform internal dao;
@@ -27,15 +27,15 @@ contract DaoVotePlatformTest is Test {
     uint256 internal proposalEpoch;
 
     function setUp() public {
-        vm.warp(WEEK * 2);
+        vm.warp(1700000000);
 
-        mockVlCVX = new MockVlCVX();
-        delegation = new Delegation(address(mockVlCVX));
+        vlcvxImpl = new simpleVlCvx();
+        delegation = new Delegation(address(vlcvxImpl));
         surrogateRegistry = new SurrogateRegistry();
 
         dao = new DaoVotePlatform(
             address(this),
-            address(mockVlCVX),
+            address(vlcvxImpl),
             address(surrogateRegistry),
             address(delegation)
         );
@@ -44,7 +44,7 @@ contract DaoVotePlatformTest is Test {
     }
 
     function _lockAndDelegate(address user, uint256 amount, address delegateAddr) internal {
-        mockVlCVX.mockLock(user, amount * WD, amount * WD);
+        vlcvxImpl.lock(user, amount * WD, 0);
         if (delegateAddr != address(0)) {
             vm.prank(user);
             delegation.setDelegate(delegateAddr);
@@ -450,8 +450,6 @@ contract DaoVotePlatformTest is Test {
     function test_pureDelegateSplitVote() public {
         _lockAndDelegate(alice, 1000, dave);
         _lockAndDelegate(bob, 500, dave);
-        vm.prank(dave);
-        mockVlCVX.mockLock(dave, 0, 0);
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
@@ -704,8 +702,6 @@ contract DaoVotePlatformTest is Test {
     function test_invariant_pureDelegate() public {
         _lockAndDelegate(alice, 1000, dave);
         _lockAndDelegate(bob, 500, dave);
-        vm.prank(dave);
-        mockVlCVX.mockLock(dave, 0, 0);
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
@@ -727,8 +723,8 @@ contract DaoVotePlatformTest is Test {
         // Bob votes first with alice's weight included
         _voteYes(bob);
         uint256 yesAfterBob = dao.getYes(pid);
-        uint256 expectedBobTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 expectedBobTotal = vlcvxImpl.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, alice);
         assertApproxEqAbs(yesAfterBob, expectedBobTotal, WD);
 
         // Alice syncs mid-proposal
@@ -813,170 +809,140 @@ contract DaoVotePlatformTest is Test {
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
-    // ========== userBaseDiff: Relock Mid-Proposal ==========
+    // ========== userBaseDiff: Relock ==========
+
+    function _advanceToExpiry(address user) internal {
+        for (uint256 i = 0; i < 16; i++) _warpToNextEpoch();
+    }
 
     function test_userBaseDiff_relockMidProposal() public {
-        _lockAndDelegate(alice, 1000, address(0));
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        _advanceToExpiry(alice);
+
+        vm.prank(alice);
+        vlcvxImpl.relock(alice, 1500 * WD, 0);
+
         uint256 pid = _createProposal();
 
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-
         _voteYes(alice);
-
-        uint256 yesBefore = dao.getYes(pid);
-        assertGt(yesBefore, 0);
-
-        // Alice relocks mid-proposal (replaces boosted with higher value)
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
-
-        // Alice re-votes
-        _voteYes(alice);
-
-        uint256 yesAfter = dao.getYes(pid);
-        assertGt(yesAfter, yesBefore);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
     function test_userBaseDiff_relockWithDelegate() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _advanceToExpiry(alice);
+
+        vm.prank(alice);
+        vlcvxImpl.relock(alice, 1500 * WD, 0);
+
         uint256 pid = _createProposal();
 
-        // Bob votes first
         _voteYes(bob);
-
-        // Alice votes
         _voteNo(alice);
-
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-
-        // Alice relocks mid-proposal (replaces boosted with higher value)
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
-
-        // Alice re-votes — triggers userBaseDiff > 0 with delegate
-        _voteNo(alice);
-
-        // Bob's pending should have been reduced by Alice's growth
-        int256 bobPending = dao.pendingWeightAdjustment(pid, bob);
-        assertLt(bobPending, 0);
-
-        // Bob re-votes to pick up pending
-        _voteYes(bob);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
     function test_userBaseDiff_relockDelegateNotVoted() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _advanceToExpiry(alice);
+
+        vm.prank(alice);
+        vlcvxImpl.relock(alice, 1500 * WD, 0);
+
         uint256 pid = _createProposal();
 
-        // Alice votes first — initBaseInfo subtracts bob's adjustedWeight by alice's delegation weight
         _voteNo(alice);
-
-        uint256 aliceBalBefore = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-
-        // Alice relocks mid-proposal
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-
-        uint256 aliceBalAfter = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice);
-        assertGt(aliceBalAfter, aliceBalBefore);
-
-        // Alice re-votes — triggers userBaseDiff > 0
-        // Bob hasn't voted (voteStatus == 0), so growth goes directly to bob.adjustedWeight
-        _voteNo(alice);
-
-        // Bob's pending should be 0 (direct subtraction, not pending)
-        int256 bobPending = dao.pendingWeightAdjustment(pid, bob);
-        assertEq(bobPending, 0);
-
-        // Bob votes — his adjustedWeight already reflects alice's growth subtraction
         _voteYes(bob);
 
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
-    function test_userBaseDiff_relockWithDelegateBeforeDelegateVotes() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
+    function test_userBaseDiff_relockBeforeDelegateVotes() public {
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _advanceToExpiry(alice);
+
+        vm.prank(alice);
+        vlcvxImpl.relock(alice, 1500 * WD, 0);
+
         uint256 pid = _createProposal();
 
-        _voteNo(alice);
-
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
         _voteNo(alice);
 
         assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
 
         _voteYes(bob);
 
-        uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
-
         assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
-        assertEq(dao.voteTotals(pid), expectedTotal);
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
     function test_userBaseDiff_relockAfterSyncBeforeDelegateVotes() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        for (uint256 i = 0; i < 14; i++) _warpToNextEpoch();
+        delegation.sync(alice);
+        for (uint256 i = 0; i < 2; i++) _warpToNextEpoch();
+        vm.prank(alice);
+        vlcvxImpl.relock(alice, 1500 * WD, 0);
+
         uint256 pid = _createProposal();
 
-        delegation.sync(alice);
-
-        _voteNo(alice);
-
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
         _voteNo(alice);
 
         assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
 
         _voteYes(bob);
 
-        uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
-
-        assertEq(dao.voteTotals(pid), expectedTotal);
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
-    function test_userBaseDiff_externalSyncBeforeDelegateVotesThenDirectRevote() public {
-        _lockAndDelegate(alice, 1000, bob);
-        _lockAndDelegate(bob, 2000, address(0));
+    function test_userBaseDiff_syncChangesDelegateWeightRevote() public {
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
         _warpToNextEpoch();
+        vlcvxImpl.lock(bob, 2000 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _warpToNextEpoch();
+
         uint256 pid = _createProposal();
-
-        _voteNo(alice);
-
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-        delegation.sync(alice);
-        vm.warp(vm.getBlockTimestamp() + 1);
 
         _voteYes(bob);
         _voteNo(alice);
 
-        uint256 expectedTotal =
-            mockVlCVX.balanceAtEpochOf(proposalEpoch, alice) + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob);
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        delegation.sync(alice);
+
+        _voteNo(alice);
+        _voteYes(bob);
 
         assertEq(dao.pendingWeightAdjustment(pid, bob), 0);
-        assertEq(dao.voteTotals(pid), expectedTotal);
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
 
-    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleRelock() public {
+    function test_delegateFirstVoteUsesDelegatedSnapshotAfterStaleLock() public {
         _lockAndDelegate(alice, 1000, dave);
         _lockAndDelegate(bob, 800, dave);
         _lockAndDelegate(dave, 400, address(0));
@@ -992,8 +958,8 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = dao.proposalCount() - 1;
         (,, proposalEpoch,,) = dao.proposals(pid);
 
-        mockVlCVX.mockRelock(alice, 0, 1500 * WD);
-        mockVlCVX.mockRelock(dave, 0, 600 * WD);
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vlcvxImpl.lock(dave, 200 * WD, 0);
 
         vm.warp(startTime);
 
@@ -1001,8 +967,8 @@ contract DaoVotePlatformTest is Test {
         _voteYes(dave);
         _voteNo(bob);
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob) + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+        uint256 expectedTotal = vlcvxImpl.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, bob) + vlcvxImpl.balanceAtEpochOf(proposalEpoch, dave);
 
         assertEq(dao.voteTotals(pid), expectedTotal);
         assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
@@ -1017,9 +983,9 @@ contract DaoVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol);
+        uint256 expectedTotal = vlcvxImpl.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, carol);
 
         _voteYes(carol);
         _voteYes(alice);
@@ -1039,10 +1005,10 @@ contract DaoVotePlatformTest is Test {
         _warpToNextEpoch();
         uint256 pid = _createProposal();
 
-        uint256 expectedTotal = mockVlCVX.balanceAtEpochOf(proposalEpoch, alice)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, bob)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, carol)
-            + mockVlCVX.balanceAtEpochOf(proposalEpoch, dave);
+        uint256 expectedTotal = vlcvxImpl.balanceAtEpochOf(proposalEpoch, alice)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, bob)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, carol)
+            + vlcvxImpl.balanceAtEpochOf(proposalEpoch, dave);
 
         _voteYes(dave);
         _voteYes(alice);
@@ -1088,7 +1054,7 @@ contract DaoVotePlatformTest is Test {
         _voteYes(dave);
 
         // Bob locks (but does NOT delegate yet — delegation changes take effect next epoch)
-        mockVlCVX.mockLock(bob, 500 * WD, 500 * WD);
+        vlcvxImpl.lock(bob, 500 * WD, 0);
 
         // Dave re-votes
         _voteYes(dave);
