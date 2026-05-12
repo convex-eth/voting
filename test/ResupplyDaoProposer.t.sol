@@ -99,8 +99,8 @@ contract ResupplyDaoProposerTest is Test {
         proposer.proposeVote(1);
 
         (uint256 s, uint256 e,, uint8 vt, uint256 vId) = daoVotePlatform.proposals(pid);
-        assertEq(s, createdAt);
-        assertEq(e, createdAt + 3 days);
+        assertEq(s, vm.getBlockTimestamp());
+        assertEq(e, vm.getBlockTimestamp() + 3 days);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
         assertEq(vId, 1);
     }
@@ -143,7 +143,7 @@ contract ResupplyDaoProposerTest is Test {
         proposer.proposeVote(4);
 
         (uint256 s,,, uint8 vt,) = daoVotePlatform.proposals(pid);
-        assertEq(s, createdAt);
+        assertEq(s, vm.getBlockTimestamp());
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
     }
 
