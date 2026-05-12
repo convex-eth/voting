@@ -85,7 +85,7 @@ contract DaoExecutorBoundaryFuzzTest is Test {
         if (quorumBps > votedSupplyRatio) {
             vm.expectRevert(CurveVoteExecutor.QuorumNotMet.selector);
             curveExecutor.executeDaoVote(pid);
-            assertEq(curveDelegate.callCount(), 0);
+            assertEq(curveDelegate.daoCallCount(), 0);
             assertFalse(curveExecutor.isDone(pid));
             return;
         }
@@ -93,7 +93,7 @@ contract DaoExecutorBoundaryFuzzTest is Test {
         curveExecutor.executeDaoVote(pid);
 
         assertTrue(curveExecutor.isDone(pid));
-        assertEq(curveDelegate.callCount(), 1);
+        assertEq(curveDelegate.daoCallCount(), 1);
         assertEq(curveDelegate.lastVoteId(), EXTERNAL_PROPOSAL_ID);
         assertEq(curveDelegate.lastYay(), yesWeight);
         assertEq(curveDelegate.lastNay(), 10_000 - yesWeight);

@@ -109,7 +109,7 @@ contract CurveVoteExecutorTest is Test {
         vm.prank(alice);
         executor.executeDaoVote(pid);
 
-        assertEq(voteDelegate.callCount(), 1);
+        assertEq(voteDelegate.daoCallCount(), 1);
     }
 
     function test_guardianCanExecuteAfterFinished() public {
@@ -125,7 +125,7 @@ contract CurveVoteExecutorTest is Test {
         vm.prank(guardian);
         executor.executeDaoVote(pid);
 
-        assertEq(voteDelegate.callCount(), 1);
+        assertEq(voteDelegate.daoCallCount(), 1);
     }
 
     function test_nonGuardianCannotExecuteBeforeFinalized() public {

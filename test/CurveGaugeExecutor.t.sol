@@ -10,7 +10,7 @@ import "../src/CurveGaugeExecutor.sol";
 import "../src/interface/IvlCVX.sol";
 import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
-import "./mocks/MockVoteDelegateExtension.sol";
+import "./mocks/MockVoteDelegationExtension.sol";
 
 contract CurveGaugeExecutorTest is Test {
     IvlCVX internal vlcvx;
@@ -19,7 +19,7 @@ contract CurveGaugeExecutorTest is Test {
     SurrogateRegistry internal surrogateRegistry;
     GaugeVotePlatform internal platform;
     CurveGaugeExecutor internal executor;
-    MockVoteDelegateExtension internal voteDelegate;
+    MockVoteDelegationExtension internal voteDelegate;
 
     MockCurveGauge internal gauge1;
     MockCurveGauge internal gauge2;
@@ -54,7 +54,7 @@ contract CurveGaugeExecutorTest is Test {
             address(delegation)
         );
 
-        voteDelegate = new MockVoteDelegateExtension();
+        voteDelegate = new MockVoteDelegationExtension();
         executor = new CurveGaugeExecutor( address(platform), address(voteDelegate));
 
         gauge1 = new MockCurveGauge();
@@ -309,7 +309,7 @@ contract CurveGaugeExecutorTest is Test {
         vm.prank(bob);
         executor.executeGaugeVote(pid, gauges);
 
-        assertEq(voteDelegate.callCount(), 1);
+        assertEq(voteDelegate.gaugeCallCount(), 1);
     }
 
     // ========== Edge Cases ==========

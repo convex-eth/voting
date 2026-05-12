@@ -58,11 +58,14 @@ contract FxGaugeExecutor {
         uint256 lastNonZero;
 
         for (uint256 i = 0; i < len; ) {
-            weights[i] = votePlatform.gaugeTotal(proposalId, gauges[i]) * WEIGHT_BPS / totalVotes;
-            if (weights[i] > 0) {
+            uint256 gt = votePlatform.gaugeTotal(proposalId, gauges[i]);
+            weights[i] = gt * WEIGHT_BPS / totalVotes;
+            if (gt > 0) {
                 count++;
-                weightSum += weights[i];
-                lastNonZero = i;
+                if (weights[i] > 0) {
+                    weightSum += weights[i];
+                    lastNonZero = i;
+                }
             }
             unchecked { ++i; }
         }
