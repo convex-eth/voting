@@ -1301,4 +1301,46 @@ contract GaugeVotePlatformTest is Test {
 
         assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
     }
+
+    // ========== Gap #15: Equalizer revote during overtime ==========
+
+    function test_equalizerRevoteDuringOvertime() public {
+        platform.setOvertimeAccount(alice, true);
+
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), 1000 * WD);
+
+        (, uint256 endTime,) = platform.proposals(pid);
+        vm.warp(endTime + 5 minutes);
+
+        _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), 0);
+        assertEq(platform.gaugeTotal(pid, address(gauge2)), 1000 * WD);
+        assertEq(platform.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== Gap #16: Gauge becomes invalid between votes ==========
+
+    function test_gaugeRemovedBetweenVotesRevertsRevote() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
+        assertEq(platform.gaugeTotal(pid, address(gauge1)), 1000 * WD);
+
+        gaugeRegistry.forceRemove(address(gauge1));
+
+        address[] memory invalidGauges = new address[](1);
+        invalidGauges[0] = address(gauge1);
+        uint256[] memory invalidWeights = new uint256[](1);
+        invalidWeights[0] = 10000;
+        vm.prank(alice);
+        vm.expectRevert(GaugeVotePlatform.NotGauge.selector);
+        platform.vote(alice, invalidGauges, invalidWeights);
+    }
 }

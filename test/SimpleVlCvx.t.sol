@@ -354,4 +354,29 @@ contract SimpleVlCvxTest is Test {
 
         assertEq(vlcvx.balanceAtEpochOf(epochId, alice), 1000);
     }
+
+    // === Gap #21: Lock at exact epoch boundary ===
+
+    function test_lockAtExactEpochBoundary() public {
+        uint256 epochTime = _currentEpoch();
+        vm.warp(epochTime);
+
+        vlcvx.lock(alice, 1000, 0);
+
+        (,, uint32 ut) = _lk(alice, 0);
+        assertEq(_lockEpochOf(ut), epochTime + WEEK);
+    }
+
+    // === Gap #24: Sequential locks at same epoch merge ===
+
+    function test_sequentialLocksSameEpochMerge() public {
+        vlcvx.lock(alice, 1000, 0);
+        vlcvx.lock(alice, 500, 0);
+
+        (uint112 amt0, uint112 bst0, uint32 ut0) = _lk(alice, 0);
+        assertEq(amt0, 1500);
+        assertEq(bst0, 1500);
+
+        assertEq(vlcvx.pendingLockOf(alice), 1500);
+    }
 }

@@ -176,4 +176,44 @@ contract EdgeCaseTest is Test {
         vm.expectRevert("no expired locks");
         simpleVlCvx(address(vlcvx)).relock(alice, 500 * WD, 0);
     }
+
+    // === Gap #2: syncAtEpoch with no delegate history ===
+
+    function test_syncAtEpochNoDelegateHistoryNoOp() public {
+        _lock(alice, 1000 * WD);
+        _warpToNextEpoch();
+        delegation.syncAtEpoch(alice, 0);
+        assertEq(delegation.userWeightAtEpochOf(0, alice), 0);
+    }
+
+    // === Gap #3: syncAtEpoch when delegate at that epoch is address(0) ===
+
+    function test_syncAtEpochRemovedDelegateNoOp() public {
+        _lock(alice, 1000 * WD);
+        vm.prank(alice);
+        delegation.setDelegate(delegate1);
+        _warpToNextEpoch();
+        delegation.sync(alice);
+
+        vm.prank(alice);
+        delegation.setDelegate(address(0));
+        _warpToNextEpoch();
+
+        delegation.syncAtEpoch(alice, 0);
+
+        assertEq(delegation.userWeightAtEpochOf(0, alice), 0);
+    }
+
+    // === Gap #4: sync() with currentDelegate == address(0) + futureDelegate != address(0) ===
+
+    function test_syncDelegateOnlyFutureWhenCurrentIsZero() public {
+        _lock(alice, 1000 * WD);
+
+        vm.prank(alice);
+        delegation.setDelegate(delegate1);
+
+        delegation.sync(alice);
+
+        assertEq(delegation.getDelegateAtEpoch(alice, 0), address(0));
+    }
 }

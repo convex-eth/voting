@@ -1082,4 +1082,93 @@ contract DaoVotePlatformTest is Test {
         assertEq(yes + no, total);
         assertEq(total, _sumAllEffectiveWeights(pid));
     }
+
+    // ========== Gap #26: Weight change without explicit sync ==========
+
+    function test_weightChangeWithoutSyncReflectedOnRevote() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        _voteYes(alice);
+        assertEq(dao.getYes(pid), 1000 * WD);
+
+        delegation.sync(alice);
+
+        _voteYes(alice);
+
+        assertEq(dao.getYes(pid), 1000 * WD);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== Gap #10: userBaseDiff > 0 with self-delegate ==========
+
+    function test_selfDelegateWeightIncreaseRevote() public {
+        vlcvxImpl.lock(alice, 1000 * WD, 0);
+        _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        _warpToNextEpoch();
+
+        uint256 pid = _createProposal();
+
+        _voteYes(alice);
+        assertEq(dao.getYes(pid), 1500 * WD);
+
+        vlcvxImpl.lock(alice, 300 * WD, 0);
+
+        _voteYes(alice);
+
+        assertEq(dao.getYes(pid), 1500 * WD);
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
+
+    // ========== Gap #14: Surrogate -> user -> surrogate retry ==========
+
+    function test_surrogateFirstThenUserThenSurrogateRetryBlocked() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        vm.prank(alice);
+        surrogateRegistry.setSurrogate(surrogate);
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+
+        vm.prank(surrogate);
+        dao.vote(alice, 10000, 0);
+        assertEq(dao.getYes(pid), 1000 * WD);
+
+        (bool voted,,, uint256 bw,) = dao.getVote(pid, alice);
+        assertTrue(voted);
+        assertEq(bw, 1000 * WD);
+
+        _voteNo(alice);
+        assertEq(dao.getNo(pid), 1000 * WD);
+        assertEq(dao.getYes(pid), 0);
+
+        vm.prank(surrogate);
+        vm.expectRevert(DaoVotePlatform.NotVoteAuth.selector);
+        dao.vote(alice, 10000, 0);
+    }
+
+    // ========== Gap #9: Weight decrease on revote ==========
+
+    function test_weightDecreaseOnRevoteUpdatesDelegate() public {
+        vlcvxImpl.lock(alice, 2000 * WD, 0);
+        _warpToNextEpoch();
+        vlcvxImpl.lock(alice, 500 * WD, 0);
+        vm.prank(alice);
+        delegation.setDelegate(bob);
+        _lockAndDelegate(bob, 2000, address(0));
+        _warpToNextEpoch();
+
+        uint256 pid = _createProposal();
+
+        _voteYes(bob);
+        _voteNo(alice);
+
+        uint256 yesBefore = dao.getYes(pid);
+        assertGt(yesBefore, 0);
+
+        _voteNo(alice);
+
+        assertEq(dao.voteTotals(pid), _sumAllEffectiveWeights(pid));
+    }
 }
