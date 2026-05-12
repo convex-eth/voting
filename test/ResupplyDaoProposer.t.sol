@@ -134,8 +134,8 @@ contract ResupplyDaoProposerTest is Test {
         proposer.proposeVote(3);
     }
 
-    function test_canProposeExactlyAt3Days() public {
-        uint256 createdAt = vm.getBlockTimestamp() - 3 days + 1;
+    function test_canProposeWithMinimumRemainingVotingWindow() public {
+        uint256 createdAt = vm.getBlockTimestamp() - proposer.proposalLength() + daoVotePlatform.MIN_PROPOSAL_DURATION();
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 4), mockData);
 
@@ -145,6 +145,15 @@ contract ResupplyDaoProposerTest is Test {
         (uint256 s,,, uint8 vt,) = daoVotePlatform.proposals(pid);
         assertEq(s, vm.getBlockTimestamp());
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
+    }
+
+    function test_lateProposalWithInsufficientRemainingWindowReverts() public {
+        uint256 createdAt = vm.getBlockTimestamp() - 3 days + 1;
+        bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
+        vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 5), mockData);
+
+        vm.expectRevert();
+        proposer.proposeVote(5);
     }
 
     function test_setProposalLength() public {

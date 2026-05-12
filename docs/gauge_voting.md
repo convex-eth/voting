@@ -9,14 +9,14 @@ GaugeVotePlatform is a Convex gauge voting contract that allows vlCVX holders an
 | Contract | Role |
 |---|---|
 | **vlCVX** (`IvlCVX`) | Provides `balanceAtEpochOf(epoch, user)` for base voting weight, `checkpointEpoch()` + `epochCount()` for epoch indexing |
-| **Delegation** | Provides delegate addresses, aggregated weight data, and `sync()` for mid-epoch weight updates |
+| **Delegation** | Provides delegate addresses, aggregated weight data, and `sync()` / `syncAtEpoch()` for mid-epoch weight updates |
 | **CurveGaugeRegistry** | Validates that voted addresses are active Curve gauges |
 | **SurrogateRegistry** | Allows a registered surrogate to vote on behalf of another address |
 
 ## Proposals
 
 - Created by operators via `createProposal(startTime, endTime)`
-- Duration must be 3-6 days
+- Duration must be 1-6 days
 - A new proposal cannot be created until the previous proposal's `endTime + overtime` has passed
 - Each proposal records an **epoch**: `vlCVX.checkpointEpoch()` is called to ensure the epoch data is current, then `epoch = vlCVX.epochCount() - 2` (minus 2 because `epochCount() - 1` is the NEXT epoch, so `epochCount() - 2` is the CURRENT epoch). This epoch anchors all weight lookups for that proposal.
 - Operators can force-end an active proposal via `forceEndProposal()`, which zeros out `startTime`, `endTime`, and `epoch`
@@ -120,7 +120,7 @@ Called by the user directly or by their registered surrogate.
 - Proposal must be active (`startTime <= block.timestamp <= endTime`, with `overtime` extension for equalizer accounts)
 - `_gauges.length == _weights.length`
 - Each `_weights[i] > 0`
-- Sum of `_weights <= max_weight (10000)`
+- Sum of `_weights` must equal `max_weight` (10000)
 - Each `_gauges[i]` must be a valid gauge via `CurveGaugeRegistry.isValidGauge()`
 - Effective voting weight (`baseWeight + adjustedWeight`) must be > 0
 
@@ -347,7 +347,7 @@ Convex must submit a list of gauges with percentage allocations to the Curve Gau
 2. **`gaugeTotals[pid][gauge]`** — vlCVX weight attributed to each gauge (already exists)
 3. **List of gauges with positive vote weight** — stored in `_gaugeEntries[pid]` (array of `GaugeTotalEntry` structs with `{gauge, totalWeight}`) with `_gaugeIndex[pid][gauge]` for O(1) lookups. Enumerated via `getGaugeCount(pid)` and `getGaugeEntry(pid, index)`.
 
-The execution output is: for each gauge in the list, `percentage = gaugeTotals[pid][gauge] * 10000 / voteTotals[pid]` (basis points).
+The execution output is: for each gauge in the list, `percentage = gaugeTotals[pid][gauge] * 10000 / voteTotals[pid]` (basis points). The gauge executors track submitted count/weight across batches and pad the final nonzero submitted gauge to 10000 bps when rounding leaves residual dust. Execution batches should be built from the canonical `getGaugeEntry` list without duplicates or already-submitted gauges; the executors do not locally deduplicate caller-supplied arrays.
 
 ### For Frontend UX
 

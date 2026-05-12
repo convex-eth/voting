@@ -98,7 +98,7 @@ This means:
 
 Without syncing, the delegate's voting weight on future proposals will not reflect the updated vlCVX balance.
 
-The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `sync(user)` during `_initBaseInfo` if they detect that the user's vlCVX balance (truncated) **differs from** their Delegation weight (using `!=` comparison, not `>`). This catches mid-proposal weight changes on both increase and decrease. The sync is idempotent per epoch — calling it again in the same epoch returns early.
+The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `syncAtEpoch(user, epoch)` during `_initBaseInfo` if they detect that the user's vlCVX balance at the proposal epoch (truncated) **differs from** their Delegation weight at that epoch (using `!=` comparison, not `>`). This catches mid-proposal weight changes when the proposal initializes that user.
 
 ## Interaction with Voting Contracts
 
@@ -109,7 +109,7 @@ Both `GaugeVotePlatform` and `DaoVotePlatform` read from the Delegation contract
 1. `delegation.getDelegateAtEpoch(user, epoch)` — finds who the user delegated to during the proposal's epoch
 2. `delegation.balanceAtEpochOf(delegate, epoch)` — the delegate's total accumulated delegatee weight
 3. `delegation.userWeightAtEpochOf(user, epoch)` — the user's own truncated weight (used for removing from delegate)
-4. `delegation.sync(user)` — called when the user's vlCVX balance exceeds their Delegation weight (truncated comparison)
+4. `delegation.syncAtEpoch(user, epoch)` — called when the user's truncated vlCVX balance differs from their Delegation weight for the proposal epoch
 5. `delegation.getSyncSnapshot(user, epoch)` — returns `(preSyncWeight, timestamp)` used for timestamp-based weight removal in voting contracts
 
 ### The Truncation Problem
@@ -124,7 +124,7 @@ Because Delegation stores weights as `uint32 / 1e17` (truncated), there can be a
 
 When a user adds vlCVX weight mid-proposal (via lock/relock + sync), their delegate's voting weight on that proposal doesn't automatically update. The new flow handles this automatically:
 
-**When `_initBaseInfo` detects a weight mismatch:** If `(vlCVX_balance / 1e17) * 1e17 > delegation.userWeightAtEpochOf()`, the voting contract calls `delegation.sync(user)` to bring delegation weights up to date.
+**When `_initBaseInfo` detects a weight mismatch:** If `(vlCVX_balance / 1e17) * 1e17 != delegation.userWeightAtEpochOf(epoch, user)`, the voting contract calls `delegation.syncAtEpoch(user, epoch)` to bring delegation weights for that proposal epoch up to date.
 
 **Timestamp-based weight removal:** When a delegatee is initialized and their delegate has already voted, the voting contract compares timestamps:
 - If the delegate voted **after** the sync: the full current delegation weight is the correct amount to remove

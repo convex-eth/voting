@@ -230,6 +230,40 @@ contract FxGaugeExecutorTest is Test {
         assertTrue(executor.isDone(pid));
     }
 
+    function test_duplicateGaugeBatchReverts() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        vm.expectRevert();
+        executor.executeGaugeVote(pid, _getGauges2(address(gauge1), address(gauge1)));
+
+        assertEq(platform.getGaugeCount(pid), 2);
+        assertEq(executor.submittedGaugeCount(pid), 0);
+        assertEq(executor.submittedWeight(pid), 0);
+        assertFalse(executor.isDone(pid));
+    }
+
+    function test_alreadySubmittedGaugeReverts() public {
+        _lockAndDelegate(alice, 1000, address(0));
+        _warpToNextEpoch();
+        uint256 pid = _createProposal();
+        _vote(alice, _getGauges2(address(gauge1), address(gauge2)), _getWeights2(6000, 4000));
+        _finalizeProposal(pid);
+
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        vm.expectRevert();
+        executor.executeGaugeVote(pid, _getGauges(address(gauge1)));
+
+        assertEq(platform.getGaugeCount(pid), 2);
+        assertEq(executor.submittedGaugeCount(pid), 1);
+        assertEq(executor.submittedWeight(pid), 6000);
+        assertFalse(executor.isDone(pid));
+    }
+
     function test_gaugeVoteExecutedEvent() public {
         _lockAndDelegate(alice, 1000, address(0));
         _warpToNextEpoch();

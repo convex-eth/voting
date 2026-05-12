@@ -143,7 +143,7 @@ Without syncing, the delegate's voting weight on proposals will not reflect the 
 
 ### Automatic Sync in Voting
 
-The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) automatically call `delegation.sync(user)` during `_initBaseInfo` if they detect the user's vlCVX balance (truncated) differs from their recorded Delegation weight. This catches mid-proposal weight changes without requiring manual intervention.
+The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) automatically call `delegation.syncAtEpoch(user, epoch)` during `_initBaseInfo` if they detect the user's vlCVX balance at the proposal epoch (truncated) differs from their recorded Delegation weight. This catches mid-proposal weight changes without requiring manual intervention.
 
 ### Expired Locks Prevent Sync
 
@@ -175,7 +175,7 @@ Vote type is metadata only — it does not affect on-chain mechanics. Quorum is 
                                 | no voting                        |
 ```
 
-- Proposals are created by operators with a 3-6 day voting window
+- Proposals are created by operators with a 1-6 day voting window
 - A new proposal cannot be created until the previous proposal's end time plus finalization window has passed
 - The `proposalId` stored is an external reference (e.g. Snapshot hash, forum post ID) that gets passed through to the executor and ultimately to the external protocol's voting contract
 - After voting ends, a 12-hour finalization window allows guardians to execute early if needed
