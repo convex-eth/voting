@@ -282,8 +282,16 @@ contract MockFxGaugeVoter is IFxGaugeVoter {
     address[] public lastGauges;
     uint256[] public lastWeights;
     uint256 public callCount;
+    uint256 public constant GAUGE_COOLDOWN = 7 days;
+    mapping(address => uint256) public lastGaugeVoteTime;
 
     function voteGaugeWeight(address, address[] calldata _gauge, uint256[] calldata _weight) external {
+        for (uint256 i = 0; i < _gauge.length; i++) {
+            if (block.timestamp < lastGaugeVoteTime[_gauge[i]] + GAUGE_COOLDOWN) {
+                revert GaugeCooldownActive(_gauge[i], GAUGE_COOLDOWN - (block.timestamp - lastGaugeVoteTime[_gauge[i]]));
+            }
+            lastGaugeVoteTime[_gauge[i]] = block.timestamp;
+        }
         lastGauges = _gauge;
         lastWeights = _weight;
         callCount++;
@@ -292,4 +300,6 @@ contract MockFxGaugeVoter is IFxGaugeVoter {
     function getLastCall() external view returns (address[] memory, uint256[] memory) {
         return (lastGauges, lastWeights);
     }
+
+    error GaugeCooldownActive(address gauge, uint256 remaining);
 }

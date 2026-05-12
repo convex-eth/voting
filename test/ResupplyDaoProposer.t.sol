@@ -147,13 +147,17 @@ contract ResupplyDaoProposerTest is Test {
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
     }
 
-    function test_lateProposalWithInsufficientRemainingWindowReverts() public {
+    function test_lateProposalWindowStillValid() public {
         uint256 createdAt = vm.getBlockTimestamp() - 3 days + 1;
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 5), mockData);
 
-        vm.expectRevert();
         proposer.proposeVote(5);
+
+        uint256 pid = daoVotePlatform.proposalCount() - 1;
+        (uint256 s, uint256 e,,,) = daoVotePlatform.proposals(pid);
+        assertEq(s, vm.getBlockTimestamp());
+        assertEq(e, vm.getBlockTimestamp() + proposer.proposalLength());
     }
 
     function test_setProposalLength() public {

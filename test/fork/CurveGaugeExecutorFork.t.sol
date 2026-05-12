@@ -5,30 +5,7 @@ import {ForkSetup} from "./Setup.sol";
 import {CurveGaugeRegistry} from "../../src/CurveGaugeRegistry.sol";
 import {CurveGaugeExecutor} from "../../src/CurveGaugeExecutor.sol";
 import {GaugeVotePlatform} from "../../src/GaugeVotePlatform.sol";
-
-contract RecordingVoteDelegateExtension {
-    uint256 public callCount;
-    address[] internal lastGauges;
-    uint256[] internal lastWeights;
-
-    function GaugeVote(address[] calldata gauges, uint256[] calldata weights) external {
-        callCount++;
-        delete lastGauges;
-        delete lastWeights;
-        for (uint256 i; i < gauges.length; i++) {
-            lastGauges.push(gauges[i]);
-            lastWeights.push(weights[i]);
-        }
-    }
-
-    function lastGauge(uint256 index) external view returns (address) {
-        return lastGauges[index];
-    }
-
-    function lastWeight(uint256 index) external view returns (uint256) {
-        return lastWeights[index];
-    }
-}
+import {MockVoteDelegationExtension} from "../mocks/MockVoteDelegationExtension.sol";
 
 contract CurveGaugeExecutorForkTest is ForkSetup {
     function setUp() public {
@@ -75,7 +52,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
 
     function testFork_partialCurveGaugeBatchDoesNotMarkDone() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
-        RecordingVoteDelegateExtension voteDelegate = new RecordingVoteDelegateExtension();
+        MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
         CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
 
         executor.executeGaugeVote(pid, arr(g1));
@@ -84,13 +61,14 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         assertEq(executor.submittedGaugeCount(pid), 1);
         assertEq(executor.submittedWeight(pid), expectedWeight);
         assertFalse(executor.isDone(pid));
-        assertEq(voteDelegate.callCount(), 1);
-        assertEq(voteDelegate.lastWeight(0), expectedWeight);
+        assertEq(voteDelegate.gaugeCallCount(), 1);
+        (, uint256[] memory w0) = voteDelegate.getLastCall();
+        assertEq(w0[0], expectedWeight);
     }
 
     function testFork_duplicateCurveGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
-        RecordingVoteDelegateExtension voteDelegate = new RecordingVoteDelegateExtension();
+        MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
         CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
 
         vm.expectRevert();
@@ -100,12 +78,12 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         assertEq(executor.submittedGaugeCount(pid), 0);
         assertEq(executor.submittedWeight(pid), 0);
         assertFalse(executor.isDone(pid));
-        assertEq(voteDelegate.callCount(), 0);
+        assertEq(voteDelegate.gaugeCallCount(), 0);
     }
 
     function testFork_alreadySubmittedCurveGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
-        RecordingVoteDelegateExtension voteDelegate = new RecordingVoteDelegateExtension();
+        MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
         CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
 
         executor.executeGaugeVote(pid, arr(g1));
@@ -118,7 +96,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         assertEq(executor.submittedGaugeCount(pid), 1);
         assertEq(executor.submittedWeight(pid), expectedWeight);
         assertFalse(executor.isDone(pid));
-        assertEq(voteDelegate.callCount(), 1);
+        assertEq(voteDelegate.gaugeCallCount(), 1);
     }
 
     function testFork_tinyCurveGaugeWeightDoesNotBlockCompletion() public {
@@ -131,7 +109,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         voteGaugeAsHolder(platform, holder, arr(g1, g2), weights(1, 9999));
         finalizeGaugeProposal(platform, pid);
 
-        RecordingVoteDelegateExtension voteDelegate = new RecordingVoteDelegateExtension();
+        MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
         CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
         executor.executeGaugeVote(pid, arr(g1, g2));
 
@@ -144,8 +122,9 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         assertEq(executor.submittedGaugeCount(pid), 2);
         assertEq(executor.submittedWeight(pid), WEIGHT_BPS);
         assertTrue(executor.isDone(pid));
-        assertEq(voteDelegate.lastWeight(0), 0);
-        assertEq(voteDelegate.lastWeight(1), largeOutput + (WEIGHT_BPS - largeOutput));
+        (, uint256[] memory tw) = voteDelegate.getLastCall();
+        assertEq(tw[0], 0);
+        assertEq(tw[1], largeOutput + (WEIGHT_BPS - largeOutput));
     }
 
     function testFork_liveCurveAdapterRevertRollsBackLocalState() public {

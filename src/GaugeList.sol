@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 library GaugeList {
-    uint256 public constant GAUGE_COUNT = 547;
+        uint256 public constant GAUGE_COUNT = 546;
 
     function getGauges() internal pure returns (address[] memory) {
-        address[] memory gauges = new address[](547);
+        address[] memory gauges = new address[](546);
         gauges[0] = 0x2db0E83599a91b508Ac268a6197b8B14F5e72840;
         gauges[1] = 0xC2b1DF84112619D190193E48148000e3990Bf627;
         gauges[2] = 0xF98450B5602fa59CC66e1379DFfB6FDDc724CfC4;
@@ -127,7 +127,7 @@ library GaugeList {
         gauges[118] = 0xa8Ea11465A1375BF42463C3B613dFC54248b9C7B;
         gauges[119] = 0x762648808EF8B25C6D92270b1C84Ec97dF3bED6B;
         gauges[120] = 0x805Aef679B1379Ee1d24c52158E7F56098D199D9;
-        gauges[121] = 0x6F98dA2D5098604239C07875C6B7Fd583BC520b9;
+        gauges[121] = 0xF429AeC167C92aCA16cD77aef54F196B1988cBA3;
         gauges[122] = 0xdA0DD1798BE66E17d5aB1Dc476302b56689C2DB4;
         gauges[123] = 0x6a69FfD1353Fa129f7F9932BB68Fa7bE88F3888A;
         gauges[124] = 0x6D787113F23bED1D5e1530402B3f364D0A6e5Af3;
@@ -552,7 +552,6 @@ library GaugeList {
         gauges[543] = 0x8F4e42343AF1CBF4f364cE448252d801E3f73937;
         gauges[544] = 0x30dD71C08c45FBFbff6637Af5afA1b845806d54D;
         gauges[545] = 0x62cd06CDe87190Fe66AA808a9a09FEc7eDd1cF24;
-        gauges[546] = 0xF429AeC167C92aCA16cD77aef54F196B1988cBA3;
         return gauges;
     }
 }

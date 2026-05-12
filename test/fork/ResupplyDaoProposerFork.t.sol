@@ -58,14 +58,14 @@ contract ResupplyDaoProposerForkTest is ForkSetup {
 
         uint256 pid = platform.proposalCount() - 1;
         (uint48 startTime, uint48 endTime,, uint8 voteType, uint104 externalId) = platform.proposals(pid);
-        assertEq(startTime, uint48(createdAt));
-        assertEq(endTime, uint48(createdAt + proposer.proposalLength()));
+        assertEq(startTime, uint48(block.timestamp));
+        assertEq(endTime, uint48(block.timestamp + proposer.proposalLength()));
         assertEq(voteType, uint8(DaoVotePlatform.VoteType.Ownership));
         assertEq(externalId, resupplyVoteId);
     }
 
-    function testFork_lateResupplyVoteWithInsufficientRemainingWindowReverts() public {
-        (, ResupplyDaoProposer proposer) = _deployProposer();
+    function testFork_lateResupplyVoteWindowStillValid() public {
+        (DaoVotePlatform platform, ResupplyDaoProposer proposer) = _deployProposer();
         uint256 resupplyVoteId = 60_001;
         uint256 createdAt = block.timestamp - 3 days + 1;
 
@@ -75,8 +75,12 @@ contract ResupplyDaoProposerForkTest is ForkSetup {
             _proposalDataReturn(createdAt, false)
         );
 
-        vm.expectRevert();
         proposer.proposeVote(resupplyVoteId);
+
+        uint256 pid = platform.proposalCount() - 1;
+        (uint48 startTime, uint48 endTime,,,) = platform.proposals(pid);
+        assertEq(startTime, uint48(block.timestamp));
+        assertEq(endTime, uint48(block.timestamp + proposer.proposalLength()));
     }
 
     function testFork_processedResupplyVoteIsRejectedFromControlledFixture() public {

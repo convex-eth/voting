@@ -31,15 +31,12 @@ contract MockVoteDelegationExtension is IVoteDelegationExtension {
     }
 
     function GaugeVote(address[] calldata _gauge, uint256[] calldata _weight) external override {
+        delete lastGauges;
+        delete lastWeights;
         for (uint256 i = 0; i < _gauge.length; i++) {
             if (block.timestamp < lastGaugeVoteTime[_gauge[i]] + GAUGE_COOLDOWN) {
                 revert GaugeCooldownActive(_gauge[i], GAUGE_COOLDOWN - (block.timestamp - lastGaugeVoteTime[_gauge[i]]));
             }
-        }
-
-        delete lastGauges;
-        delete lastWeights;
-        for (uint256 i = 0; i < _gauge.length; i++) {
             lastGauges.push(_gauge[i]);
             lastWeights.push(_weight[i]);
             lastGaugeVoteTime[_gauge[i]] = block.timestamp;
