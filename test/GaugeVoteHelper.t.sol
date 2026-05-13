@@ -55,7 +55,7 @@ contract GaugeVoteHelperTest is Test {
             address(delegation)
         );
 
-        calc = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation), address(platform));
+        calc = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation));
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();
@@ -106,7 +106,7 @@ contract GaugeVoteHelperTest is Test {
     function _query(address user, uint256 pid) internal returns (uint256) {
         address[] memory users = new address[](1);
         users[0] = user;
-        uint256[] memory weights = calc.getContributingWeights(pid, delegate1, users);
+        uint256[] memory weights = calc.getContributingWeights(pid, delegate1, users, platform);
         return weights[0];
     }
 
@@ -250,7 +250,7 @@ contract GaugeVoteHelperTest is Test {
         users[1] = bob;
         users[2] = carol;
 
-        uint256[] memory weights = calc.getContributingWeights(pid, delegate1, users);
+        uint256[] memory weights = calc.getContributingWeights(pid, delegate1, users, platform);
 
         assertEq(weights[0], 100 * WD, "alice: G - pre-sync, delegate voted before");
         assertEq(weights[1], 50 * WD, "bob: E - no sync, full weight");

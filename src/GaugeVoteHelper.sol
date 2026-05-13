@@ -7,24 +7,23 @@ import "./GaugeVotePlatform.sol";
 contract GaugeVoteHelper {
     string public name;
     Delegation public immutable delegation;
-    GaugeVotePlatform public immutable gaugePlatform;
 
-    constructor(string memory _name, address _delegation, address _gaugePlatform) {
+    constructor(string memory _name, address _delegation) {
         name = _name;
         delegation = Delegation(_delegation);
-        gaugePlatform = GaugeVotePlatform(_gaugePlatform);
     }
 
     function getContributingWeights(
         uint256 _proposalId,
         address _delegate,
-        address[] calldata _users
+        address[] calldata _users,
+        GaugeVotePlatform _gaugePlatform
     ) external view returns (uint256[] memory) {
         uint256 len = _users.length;
         uint256[] memory weights = new uint256[](len);
 
-        (,, uint48 propEpoch) = gaugePlatform.proposals(_proposalId);
-        (,, uint48 delLastVoteTime, uint8 delVoteStatus,,) = gaugePlatform.userInfo(_proposalId, _delegate);
+        (,, uint48 propEpoch) = _gaugePlatform.proposals(_proposalId);
+        (,, uint48 delLastVoteTime, uint8 delVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, _delegate);
 
         for (uint256 i; i < len;) {
             address user = _users[i];
@@ -37,7 +36,7 @@ contract GaugeVoteHelper {
 
             uint256 packedWeight = delegation.userWeightAtEpochOf(uint256(propEpoch), user);
             (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(user, uint256(propEpoch));
-            (,, uint48 userLastVoteTime, uint8 userVoteStatus,,) = gaugePlatform.userInfo(_proposalId, user);
+            (,, uint48 userLastVoteTime, uint8 userVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, user);
 
             if (userVoteStatus > 0) {
                 if (snapTs > 0 && snapTs > uint256(userLastVoteTime)) {

@@ -19,6 +19,7 @@ import "../src/ResupplyDaoProposer.sol";
 import "../src/CurveDaoProposer.sol";
 import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
+import "../src/GaugeVoteHelper.sol";
 
 // ============================================================================
 // Deploy Script for Convex Voting Project
@@ -186,6 +187,14 @@ contract Deploy is Script {
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", GAUGE_EXECUTOR, address(curveGaugeExecutor)));
         console.log("Registered CURVE -> GAUGE_EXECUTOR");
+
+        GaugeVoteHelper curveGaugeHelper = new GaugeVoteHelper("Gauge Vote Helper",
+            address(gaugeDelegation)
+        );
+        console.log("GaugeVoteHelper:", address(curveGaugeHelper));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "HELPER", 2, address(curveGaugeHelper)));
+        console.log("Registered HELPER -> GAUGE_HELPER");
 
         // ── 10. Deploy Proposers ──
         CurveDaoProposer curveDaoProposer = new CurveDaoProposer("Curve Dao Proposer", 
@@ -514,5 +523,36 @@ contract Deploy is Script {
         console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
         console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
         console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
+        console.log("GaugeVoteHelper:", address(curveGaugeHelper));
+
+        vm.serializeAddress("deploy", "ConvexCore", address(core));
+        vm.serializeAddress("deploy", "VotingRegistry", address(registry));
+        vm.serializeAddress("deploy", "CurveDaoVoting", address(curveDaoVoting));
+        vm.serializeAddress("deploy", "CurveGaugeVoting", address(curveGaugeVoting));
+        vm.serializeAddress("deploy", "CurveGaugeRegistry", address(curveGaugeRegistry));
+        vm.serializeAddress("deploy", "CurveVoteExecutor", address(curveVoteExecutor));
+        vm.serializeAddress("deploy", "CurveGaugeExecutor", address(curveGaugeExecutor));
+        vm.serializeAddress("deploy", "CurveDaoProposer", address(curveDaoProposer));
+        vm.serializeAddress("deploy", "CurveGaugeProposer", address(curveGaugeProposer));
+        vm.serializeAddress("deploy", "GaugeVoteHelper", address(curveGaugeHelper));
+        vm.serializeAddress("deploy", "FxGaugeRegistry", address(fxGaugeRegistry));
+        vm.serializeAddress("deploy", "FxDaoVoting", address(fxDaoVoting));
+        vm.serializeAddress("deploy", "FxGaugeVoting", address(fxGaugeVoting));
+        vm.serializeAddress("deploy", "FxDaoProposer", address(fxDaoProposer));
+        vm.serializeAddress("deploy", "FxGaugeProposer", address(fxGaugeProposer));
+        vm.serializeAddress("deploy", "FxGaugeExecutor", address(fxGaugeExecutor));
+        vm.serializeAddress("deploy", "FraxDaoVoting", address(fraxDaoVoting));
+        vm.serializeAddress("deploy", "FraxDaoProposer", address(fraxDaoProposer));
+        vm.serializeAddress("deploy", "ConvexDaoVoting", address(convexDaoVoting));
+        vm.serializeAddress("deploy", "ConvexDaoProposer", address(convexDaoProposer));
+        vm.serializeAddress("deploy", "ResupplyDaoVoting", address(resupplyDaoVoting));
+        vm.serializeAddress("deploy", "ResupplyDaoProposer", address(resupplyDaoProposer));
+        vm.serializeAddress("deploy", "ResupplyVoteExecutor", address(resupplyVoteExecutor));
+        vm.serializeAddress("deploy", "DaoDelegation", address(daoDelegation));
+        vm.serializeAddress("deploy", "GaugeDelegation", address(gaugeDelegation));
+        vm.serializeAddress("deploy", "SurrogateRegistry", address(surrogateRegistry));
+        string memory finalJson = vm.serializeAddress("deploy", "VoteDelegateExtension", VOTE_DELEGATE);
+
+        vm.writeJson(finalJson, "deployment/mainnet.json");
     }
 }

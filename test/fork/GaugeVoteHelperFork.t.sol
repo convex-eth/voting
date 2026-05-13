@@ -28,7 +28,7 @@ contract GaugeVoteHelperForkTest is ForkSetup {
             address(surrogateRegistry),
             address(delegation)
         );
-        GaugeVoteHelper helper = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation), address(platform));
+        GaugeVoteHelper helper = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation));
 
         vm.prank(holder);
         delegation.setDelegate(delegate);
@@ -43,7 +43,7 @@ contract GaugeVoteHelperForkTest is ForkSetup {
         platform.vote(delegate, arr(g1), weights(WEIGHT_BPS));
 
         address[] memory users = arr(holder);
-        uint256[] memory contributions = helper.getContributingWeights(pid, delegate, users);
+        uint256[] memory contributions = helper.getContributingWeights(pid, delegate, users, platform);
         uint256 expected = delegation.userWeightAtEpochOf(delegatedEpoch, holder);
         assertGt(expected, 0);
         assertEq(contributions[0], expected);
@@ -51,7 +51,7 @@ contract GaugeVoteHelperForkTest is ForkSetup {
         vm.prank(holder);
         platform.vote(holder, arr(g2), weights(WEIGHT_BPS));
 
-        contributions = helper.getContributingWeights(pid, delegate, users);
+        contributions = helper.getContributingWeights(pid, delegate, users, platform);
         assertEq(contributions[0], 0);
     }
 }
