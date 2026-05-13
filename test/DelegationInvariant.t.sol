@@ -36,7 +36,7 @@ contract DelegationInvariantHandler is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
 
         uint256[ACTOR_COUNT] memory initialWeights =
             [uint256(1000 * WD), uint256(800 * WD), uint256(600 * WD), uint256(400 * WD), uint256(200 * WD)];

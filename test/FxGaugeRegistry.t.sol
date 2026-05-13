@@ -46,7 +46,7 @@ contract FxGaugeRegistryTest is Test {
         vm.etch(gauge, address(mockGauge).code);
 
         address[] memory initial = new address[](0);
-        registry = new FxGaugeRegistry(owner, initial);
+        registry = new FxGaugeRegistry("Fx Gauge Registry", owner, initial);
     }
 
     function test_initialGaugesRegisteredWithoutValidation() public {
@@ -54,7 +54,7 @@ contract FxGaugeRegistryTest is Test {
         initial[0] = gauge;
         initial[1] = makeAddr("fakeGauge");
 
-        FxGaugeRegistry reg = new FxGaugeRegistry(owner, initial);
+        FxGaugeRegistry reg = new FxGaugeRegistry("Fx Gauge Registry", owner, initial);
 
         assertEq(reg.gaugeLength(), 2);
         assertTrue(reg.isRegisteredGauge(gauge));

@@ -35,7 +35,7 @@ contract ResupplyVoteExecutorForkTest is ForkSetup {
         (, uint48 endTime,,,) = platform.proposals(pid);
         vm.warp(uint256(endTime) + TIME_BUFFER);
 
-        ResupplyVoteExecutor executor = new ResupplyVoteExecutor(address(this), address(platform), 0);
+        ResupplyVoteExecutor executor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(platform), 0);
 
         vm.expectRevert(ResupplyVoteExecutor.NotFinished.selector);
         executor.executeDaoVote(pid);
@@ -45,7 +45,7 @@ contract ResupplyVoteExecutorForkTest is ForkSetup {
         (DaoVotePlatform platform, uint256 pid) = _votedDaoProposal();
         finalizeDaoProposal(platform, pid);
 
-        ResupplyVoteExecutor executor = new ResupplyVoteExecutor(address(this), address(platform), 0);
+        ResupplyVoteExecutor executor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(platform), 0);
 
         vm.expectRevert();
         executor.executeDaoVote(pid);

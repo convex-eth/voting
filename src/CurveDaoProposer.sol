@@ -20,6 +20,7 @@ interface ICurveVoting {
 }
 
 contract CurveDaoProposer is Ownable2Step {
+    string public name;
     address public constant CURVE_OWNERSHIP = 0xE478de485ad2fe566d49342Cbd03E49ed7DB3356;
     address public constant CURVE_PARAMETER = 0xBCfF8B0b9419b9A88c44546519b1e909cF330399;
 
@@ -33,7 +34,8 @@ contract CurveDaoProposer is Ownable2Step {
     event VoteProposed(uint256 curveVoteId, bool isOwnership, uint256 daoProposalId);
     event ProposalLengthSet(uint256 newProposalLength);
 
-    constructor(address _owner, address _daoVotePlatform) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address _daoVotePlatform) Ownable(_owner) {
+        name = _name;
         daoVotePlatform = IDaoVotePlatform(_daoVotePlatform);
     }
 
@@ -70,5 +72,11 @@ contract CurveDaoProposer is Ownable2Step {
         );
 
         emit VoteProposed(_voteId, _isOwnership, daoVotePlatform.proposalCount() - 1);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

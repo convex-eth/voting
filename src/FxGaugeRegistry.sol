@@ -6,6 +6,7 @@ import "./interface/IFxGauge.sol";
 import "./interface/IFxGaugeController.sol";
 
 contract FxGaugeRegistry is Ownable2Step {
+    string public name;
 
     uint256 public constant LIQUIDITY_POOL = 0;
     uint256 public constant REBALANCE_POOL = 1;
@@ -17,7 +18,8 @@ contract FxGaugeRegistry is Ownable2Step {
     mapping(address => bool) public forceRemoved;
     address[] public activeGauges;
 
-    constructor(address _owner, address[] memory _initialGauges) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address[] memory _initialGauges) Ownable(_owner) {
+        name = _name;
         for (uint256 i = 0; i < _initialGauges.length; i++) {
             activeGauges.push(_initialGauges[i]);
             activeGaugeIndex[_initialGauges[i]] = activeGauges.length;
@@ -92,5 +94,11 @@ contract FxGaugeRegistry is Ownable2Step {
         }
 
         emit SetGauge(_gauge, isActive);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

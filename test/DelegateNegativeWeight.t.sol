@@ -68,15 +68,15 @@ contract DelegateNegativeWeightTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(CURVE_GAUGE_CONTROLLER, gaugeController.code);
-        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
 
-        dao = new DaoVotePlatform(address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
-        gaugePlatform = new GaugeVotePlatform(
+        dao = new DaoVotePlatform("Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
+        gaugePlatform = new GaugeVotePlatform("Convex Gauge Voting", 
             address(this), address(vlcvx), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
         );
         dao.setOperator(operator, true);

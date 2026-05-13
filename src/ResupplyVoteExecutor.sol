@@ -15,6 +15,7 @@ interface IResupplyVoter {
 }
 
 contract ResupplyVoteExecutor is Ownable2Step {
+    string public name;
 
     error NotFinished();
     error AlreadyExecuted();
@@ -37,7 +38,8 @@ contract ResupplyVoteExecutor is Ownable2Step {
     event GuardianSet(address indexed guardian, bool active);
     event QuorumSet(uint256 quorumBps);
 
-    constructor(address _owner, address _votePlatform, uint256 _quorumBps) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address _votePlatform, uint256 _quorumBps) Ownable(_owner) {
+        name = _name;
         if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         votePlatform = DaoVotePlatform(_votePlatform);
         quorumBps = _quorumBps;
@@ -91,5 +93,11 @@ contract ResupplyVoteExecutor is Ownable2Step {
 
     function claimAndStake() external returns (uint256 amount) {
         amount = IResupplyStaker(RESUPPLY_STAKER).claimAndStake();
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

@@ -5,6 +5,7 @@ import "./interface/IDaoVotePlatform.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract GenericDaoProposer is Ownable2Step {
+    string public name;
     IDaoVotePlatform public immutable daoVotePlatform;
 
     uint256 public proposalLength = 3 days;
@@ -15,7 +16,8 @@ contract GenericDaoProposer is Ownable2Step {
     event ProposalLengthSet(uint256 newLength);
     event ProposalCreated(uint256 proposalId, address indexed proposer, uint256 voteId, uint8 voteType);
 
-    constructor(address _owner, address _daoVotePlatform) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address _daoVotePlatform) Ownable(_owner) {
+        name = _name;
         daoVotePlatform = IDaoVotePlatform(_daoVotePlatform);
     }
 
@@ -47,5 +49,11 @@ contract GenericDaoProposer is Ownable2Step {
         );
 
         emit ProposalCreated(proposalId, msg.sender, _voteId, _voteType);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

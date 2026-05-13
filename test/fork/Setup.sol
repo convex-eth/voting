@@ -244,18 +244,18 @@ abstract contract ForkSetup is Test, ForkConstants {
         internal
         returns (Delegation delegation, SurrogateRegistry surrogateRegistry, GaugeVotePlatform platform)
     {
-        delegation = new Delegation(VLCVX);
-        surrogateRegistry = new SurrogateRegistry();
-        platform = new GaugeVotePlatform(address(this), VLCVX, registry, address(surrogateRegistry), address(delegation));
+        delegation = new Delegation("Convex Delegation", VLCVX);
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
+        platform = new GaugeVotePlatform("Convex Gauge Voting", address(this), VLCVX, registry, address(surrogateRegistry), address(delegation));
     }
 
     function deployDaoPlatform()
         internal
         returns (Delegation delegation, SurrogateRegistry surrogateRegistry, DaoVotePlatform platform)
     {
-        delegation = new Delegation(VLCVX);
-        surrogateRegistry = new SurrogateRegistry();
-        platform = new DaoVotePlatform(address(this), VLCVX, address(surrogateRegistry), address(delegation));
+        delegation = new Delegation("Convex Delegation", VLCVX);
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
+        platform = new DaoVotePlatform("Convex Dao Voting", address(this), VLCVX, address(surrogateRegistry), address(delegation));
     }
 
     function createGaugeProposal(GaugeVotePlatform platform, uint256 proposalLength) internal returns (uint256 pid) {

@@ -6,6 +6,7 @@ import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract GaugeProposer is Ownable2Step {
+    string public name;
     uint256 public proposalLength = 5 days;
 
     IvlCVX public immutable vlCVX;
@@ -16,7 +17,8 @@ contract GaugeProposer is Ownable2Step {
     event GaugeVoteProposed(uint256 daoProposalId);
     event ProposalLengthSet(uint256 newProposalLength);
 
-    constructor(address _owner, address _vlCVX, address _gaugeVotePlatform) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address _vlCVX, address _gaugeVotePlatform) Ownable(_owner) {
+        name = _name;
         vlCVX = IvlCVX(_vlCVX);
         gaugeVotePlatform = IGaugeVotePlatform(_gaugeVotePlatform);
 
@@ -51,5 +53,11 @@ contract GaugeProposer is Ownable2Step {
         gaugeVotePlatform.createProposal(startTime, endTime);
 
         emit GaugeVoteProposed(proposalId);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

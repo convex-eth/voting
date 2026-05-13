@@ -25,10 +25,10 @@ contract GenericDaoProposerTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        daoVotePlatform = new DaoVotePlatform(
+        daoVotePlatform = new DaoVotePlatform("Convex Dao Voting", 
             owner,
             address(vlcvx),
             address(surrogateRegistry),
@@ -37,7 +37,7 @@ contract GenericDaoProposerTest is Test {
 
         daoVotePlatform.setOperator(address(this), true);
 
-        proposer = new GenericDaoProposer(owner, address(daoVotePlatform));
+        proposer = new GenericDaoProposer("Generic Dao Proposer", owner, address(daoVotePlatform));
         daoVotePlatform.setOperator(address(proposer), true);
     }
 

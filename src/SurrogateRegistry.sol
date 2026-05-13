@@ -3,6 +3,11 @@ pragma solidity ^0.8.13;
 
 
 contract SurrogateRegistry {
+    string public name;
+
+    constructor(string memory _name) {
+        name = _name;
+    }
 
     struct Info {
         address surrogate;
@@ -23,5 +28,11 @@ contract SurrogateRegistry {
             timestamp: uint32(block.timestamp)
         });
         emit SurrogateSet(msg.sender, _surrogate);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

@@ -51,10 +51,10 @@ contract ResupplyVoteExecutorTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        daoVotePlatform = new DaoVotePlatform(
+        daoVotePlatform = new DaoVotePlatform("Convex Dao Voting", 
             address(this),
             address(vlcvx),
             address(surrogateRegistry),
@@ -66,7 +66,7 @@ contract ResupplyVoteExecutorTest is Test {
         mockStaker = new MockResupplyStaker();
         vm.etch(RESUPPLY_STAKER, address(mockStaker).code);
 
-        executor = new ResupplyVoteExecutor(address(this), address(daoVotePlatform), 0);
+        executor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(daoVotePlatform), 0);
         executor.setGuardian(guardian, true);
 
         // Ensure the mock is set at the constant address
@@ -236,7 +236,7 @@ contract ResupplyVoteExecutorTest is Test {
 
     function test_cannotConstructWithQuorumAboveBps() public {
         vm.expectRevert(ResupplyVoteExecutor.InvalidQuorum.selector);
-        new ResupplyVoteExecutor(address(this), address(daoVotePlatform), 10001);
+        new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(daoVotePlatform), 10001);
     }
 
     function test_eventEmitted() public {

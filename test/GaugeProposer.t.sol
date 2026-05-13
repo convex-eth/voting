@@ -29,11 +29,11 @@ contract GaugeProposerTest is Test {
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
 
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
-        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
 
-        gaugeVotePlatform = new GaugeVotePlatform(
+        gaugeVotePlatform = new GaugeVotePlatform("Convex Gauge Voting", 
             owner,
             address(vlcvx),
             address(gaugeRegistry),
@@ -43,7 +43,7 @@ contract GaugeProposerTest is Test {
 
         gaugeVotePlatform.setOperator(operator, true);
 
-        proposer = new GaugeProposer(owner, address(vlcvx), address(gaugeVotePlatform));
+        proposer = new GaugeProposer("Convex Gauge Proposer", owner, address(vlcvx), address(gaugeVotePlatform));
         gaugeVotePlatform.setOperator(address(proposer), true);
     }
 

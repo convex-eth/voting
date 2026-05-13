@@ -32,10 +32,10 @@ contract CurveVoteExecutorTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        dao = new DaoVotePlatform(
+        dao = new DaoVotePlatform("Convex Dao Voting", 
             address(this),
             address(vlcvx),
             address(surrogateRegistry),
@@ -45,7 +45,7 @@ contract CurveVoteExecutorTest is Test {
         dao.setOperator(operator, true);
 
         voteDelegate = new MockVoteDelegationExtension();
-        executor = new CurveVoteExecutor(address(this), address(dao), address(voteDelegate), 0);
+        executor = new CurveVoteExecutor("Curve Vote Executor", address(this), address(dao), address(voteDelegate), 0);
         executor.setGuardian(guardian, true);
     }
 
@@ -412,6 +412,6 @@ contract CurveVoteExecutorTest is Test {
 
     function test_cannotConstructWithQuorumAboveBps() public {
         vm.expectRevert(CurveVoteExecutor.InvalidQuorum.selector);
-        new CurveVoteExecutor(address(this), address(dao), address(voteDelegate), 10001);
+        new CurveVoteExecutor("Curve Vote Executor", address(this), address(dao), address(voteDelegate), 10001);
     }
 }

@@ -6,6 +6,7 @@ import "./interface/IGaugeController.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract CurveGaugeRegistry is Ownable2Step {
+    string public name;
 
     address public constant gaugeController = address(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB);
     event SetGauge(address _gauge, bool _active);
@@ -14,7 +15,8 @@ contract CurveGaugeRegistry is Ownable2Step {
     mapping(address => bool) public forceRemoved;
     address[] public activeGauges;
 
-    constructor(address _owner, address[] memory _initialGauges) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address[] memory _initialGauges) Ownable(_owner) {
+        name = _name;
         for (uint256 i = 0; i < _initialGauges.length; i++) {
             activeGauges.push(_initialGauges[i]);
             activeGaugeIndex[_initialGauges[i]] = activeGauges.length;
@@ -87,5 +89,11 @@ contract CurveGaugeRegistry is Ownable2Step {
         }
 
         emit SetGauge(_gauge, isActive);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

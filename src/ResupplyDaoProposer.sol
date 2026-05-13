@@ -19,6 +19,7 @@ interface IResupplyVoting {
 }
 
 contract ResupplyDaoProposer is Ownable2Step {
+    string public name;
     address public constant RESUPPLY_VOTING = 0x11111111063874cE8dC6232cb5C1C849359476E6;
 
     uint256 public proposalLength = 3 days;
@@ -30,7 +31,8 @@ contract ResupplyDaoProposer is Ownable2Step {
     event VoteProposed(uint256 resupplyVoteId, uint256 daoProposalId);
     event ProposalLengthSet(uint256 newProposalLength);
 
-    constructor(address _owner, address _daoVotePlatform) Ownable(_owner) {
+    constructor(string memory _name, address _owner, address _daoVotePlatform) Ownable(_owner) {
+        name = _name;
         daoVotePlatform = IDaoVotePlatform(_daoVotePlatform);
     }
 
@@ -60,5 +62,11 @@ contract ResupplyDaoProposer is Ownable2Step {
         );
 
         emit VoteProposed(_voteId, daoVotePlatform.proposalCount() - 1);
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

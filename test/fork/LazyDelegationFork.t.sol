@@ -28,7 +28,7 @@ contract LazyDelegationForkTest is ForkSetup {
     function testFork_controlledGaugeVoteUsesLiveHolderWeight() public {
         (address holder,, uint256 holderWeight) = liveVlCvxHolder();
         address gauge = liveCurveGauge();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), arr(gauge));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), arr(gauge));
         (,, GaugeVotePlatform platform) = deployGaugePlatform(address(registry));
 
         uint256 pid = createGaugeProposal(platform, 1 days);
@@ -42,10 +42,10 @@ contract LazyDelegationForkTest is ForkSetup {
         (address holder,, uint256 holderWeight) = liveVlCvxHolder();
         address surrogate = makeAddr("surrogate");
         (address g1, address g2) = twoLiveCurveGauges();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), arr(g1, g2));
-        Delegation delegation = new Delegation(VLCVX);
-        SurrogateRegistry surrogateRegistry = new SurrogateRegistry();
-        GaugeVotePlatform platform = new GaugeVotePlatform(
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), arr(g1, g2));
+        Delegation delegation = new Delegation("Convex Delegation", VLCVX);
+        SurrogateRegistry surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
+        GaugeVotePlatform platform = new GaugeVotePlatform("Convex Gauge Voting", 
             address(this),
             VLCVX,
             address(registry),

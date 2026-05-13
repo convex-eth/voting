@@ -18,17 +18,17 @@ contract GaugeVoteHelperForkTest is ForkSetup {
         (address holder,,) = liveVlCvxHolder();
         address delegate = makeAddr("delegate");
         (address g1, address g2) = twoLiveCurveGauges();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), arr(g1, g2));
-        Delegation delegation = new Delegation(VLCVX);
-        SurrogateRegistry surrogateRegistry = new SurrogateRegistry();
-        GaugeVotePlatform platform = new GaugeVotePlatform(
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), arr(g1, g2));
+        Delegation delegation = new Delegation("Convex Delegation", VLCVX);
+        SurrogateRegistry surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
+        GaugeVotePlatform platform = new GaugeVotePlatform("Convex Gauge Voting", 
             address(this),
             VLCVX,
             address(registry),
             address(surrogateRegistry),
             address(delegation)
         );
-        GaugeVoteHelper helper = new GaugeVoteHelper(address(delegation), address(platform));
+        GaugeVoteHelper helper = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation), address(platform));
 
         vm.prank(holder);
         delegation.setDelegate(delegate);

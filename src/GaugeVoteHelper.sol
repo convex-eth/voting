@@ -5,10 +5,12 @@ import "./Delegation.sol";
 import "./GaugeVotePlatform.sol";
 
 contract GaugeVoteHelper {
+    string public name;
     Delegation public immutable delegation;
     GaugeVotePlatform public immutable gaugePlatform;
 
-    constructor(address _delegation, address _gaugePlatform) {
+    constructor(string memory _name, address _delegation, address _gaugePlatform) {
+        name = _name;
         delegation = Delegation(_delegation);
         gaugePlatform = GaugeVotePlatform(_gaugePlatform);
     }
@@ -53,5 +55,11 @@ contract GaugeVoteHelper {
         }
 
         return weights;
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

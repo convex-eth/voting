@@ -11,7 +11,7 @@ contract SurrogateRegistryTest is Test {
     address internal carol = makeAddr("carol");
 
     function setUp() public {
-        registry = new SurrogateRegistry();
+        registry = new SurrogateRegistry("Convex Surrogate Registry");
     }
 
     function test_setSurrogate() public {

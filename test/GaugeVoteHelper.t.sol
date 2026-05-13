@@ -39,15 +39,15 @@ contract GaugeVoteHelperTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
 
-        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
-        surrogateRegistry = new SurrogateRegistry();
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        platform = new GaugeVotePlatform(
+        platform = new GaugeVotePlatform("Convex Gauge Voting", 
             address(this),
             address(vlcvx),
             address(gaugeRegistry),
@@ -55,7 +55,7 @@ contract GaugeVoteHelperTest is Test {
             address(delegation)
         );
 
-        calc = new GaugeVoteHelper(address(delegation), address(platform));
+        calc = new GaugeVoteHelper("Convex Gauge Vote Helper", address(delegation), address(platform));
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();

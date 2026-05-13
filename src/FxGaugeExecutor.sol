@@ -6,6 +6,7 @@ import "./interface/IvlCVX.sol";
 import "./interface/IFxGaugeVoter.sol";
 
 contract FxGaugeExecutor {
+    string public name;
 
     error NotFinalized();
     error NotLatestProposal();
@@ -36,7 +37,8 @@ contract FxGaugeExecutor {
 
     event GaugeVoteExecuted(uint256 indexed proposalId, address[] gauges, uint256[] weights);
 
-    constructor(address _votePlatform) {
+    constructor(string memory _name, address _votePlatform) {
+        name = _name;
         votePlatform = GaugeVotePlatform(_votePlatform);
     }
 
@@ -91,4 +93,9 @@ contract FxGaugeExecutor {
         return _executionState[proposalId].gaugeCount == votePlatform.getGaugeCount(proposalId);
     }
 
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
+    }
 }

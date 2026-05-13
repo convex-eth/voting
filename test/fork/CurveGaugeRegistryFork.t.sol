@@ -11,7 +11,7 @@ contract CurveGaugeRegistryForkTest is ForkSetup {
 
     function testFork_liveValidCurveGaugeRegisters() public {
         address gauge = liveCurveGauge();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
 
         assertTrue(registry.isValidGauge(gauge));
         registry.setGauge(gauge);
@@ -23,7 +23,7 @@ contract CurveGaugeRegistryForkTest is ForkSetup {
 
     function testFork_zeroWeightCurveGaugeIsRejected() public {
         address gauge = invalidCurveGauge();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
 
         registry.setGauge(gauge);
 
@@ -35,7 +35,7 @@ contract CurveGaugeRegistryForkTest is ForkSetup {
         (address gauge, bool found) = killedCurveGauge();
         if (!found) vm.skip(true);
 
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
         registry.setGauge(gauge);
 
         assertFalse(registry.isRegisteredGauge(gauge));
@@ -45,7 +45,7 @@ contract CurveGaugeRegistryForkTest is ForkSetup {
     function testFork_batchReconcilesMixedCurveCandidates() public {
         address validGauge = liveCurveGauge();
         address invalidGauge = invalidCurveGauge();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
 
         registry.setGauges(arr(validGauge, invalidGauge));
 
@@ -58,7 +58,7 @@ contract CurveGaugeRegistryForkTest is ForkSetup {
         address validGauge = liveCurveGauge();
         address invalidGauge = invalidCurveGauge();
         address[] memory initial = arr(validGauge, invalidGauge);
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), initial);
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), initial);
 
         assertEq(registry.gaugeLength(), 2);
         registry.setGauges(initial);

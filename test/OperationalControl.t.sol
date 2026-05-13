@@ -106,7 +106,7 @@ contract OperationalControlTest is Test {
 
     function test_coreCanRotateGenericProposerOperatorsAndRevokedOperatorCannotPropose() public {
         OperationalMockDaoVotePlatform platform = new OperationalMockDaoVotePlatform();
-        GenericDaoProposer proposer = new GenericDaoProposer(address(core), address(platform));
+        GenericDaoProposer proposer = new GenericDaoProposer("Generic Dao Proposer", address(core), address(platform));
 
         vm.startPrank(operator);
         core.execute(address(proposer), abi.encodeWithSelector(GenericDaoProposer.setOperator.selector, bot, true));
@@ -130,7 +130,7 @@ contract OperationalControlTest is Test {
     }
 
     function test_coreCanRotateExecutorGuardians() public {
-        CurveVoteExecutor executor = new CurveVoteExecutor(address(core), address(0x1234), address(0x5678), 0);
+        CurveVoteExecutor executor = new CurveVoteExecutor("Curve Vote Executor", address(core), address(0x1234), address(0x5678), 0);
 
         vm.startPrank(operator);
         core.execute(address(executor), abi.encodeWithSelector(CurveVoteExecutor.setGuardian.selector, guardian, true));
@@ -144,7 +144,7 @@ contract OperationalControlTest is Test {
         OperationalControlMockResupplyStaker staker = new OperationalControlMockResupplyStaker();
         vm.etch(RESUPPLY_STAKER, address(staker).code);
 
-        ResupplyVoteExecutor executor = new ResupplyVoteExecutor(address(core), address(0x1234), 0);
+        ResupplyVoteExecutor executor = new ResupplyVoteExecutor("Resupply Vote Executor", address(core), address(0x1234), 0);
 
         vm.prank(keeper);
         uint256 amount = executor.claimAndStake();

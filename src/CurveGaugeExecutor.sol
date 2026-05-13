@@ -6,6 +6,7 @@ import "./interface/IvlCVX.sol";
 import "./interface/IVoteDelegationExtension.sol";
 
 contract CurveGaugeExecutor {
+    string public name;
 
     error NotFinalized();
     error NotLatestProposal();
@@ -34,7 +35,8 @@ contract CurveGaugeExecutor {
 
     event GaugeVoteExecuted(uint256 indexed proposalId, address[] gauges, uint256[] weights);
 
-    constructor(address _votePlatform, address _voteDelegate) {
+    constructor(string memory _name, address _votePlatform, address _voteDelegate) {
+        name = _name;
         votePlatform = GaugeVotePlatform(_votePlatform);
         voteDelegate = IVoteDelegationExtension(_voteDelegate);
     }
@@ -90,4 +92,9 @@ contract CurveGaugeExecutor {
         return _executionState[proposalId].gaugeCount == votePlatform.getGaugeCount(proposalId);
     }
 
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
+    }
 }

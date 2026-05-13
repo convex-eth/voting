@@ -27,7 +27,7 @@ contract CurveDaoProposerForkTest is ForkSetup {
 
     function _deployProposer() internal returns (DaoVotePlatform platform, CurveDaoProposer proposer) {
         (,, platform) = deployDaoPlatform();
-        proposer = new CurveDaoProposer(address(this), address(platform));
+        proposer = new CurveDaoProposer("Curve Dao Proposer", address(this), address(platform));
         platform.setOperator(address(proposer), true);
     }
 

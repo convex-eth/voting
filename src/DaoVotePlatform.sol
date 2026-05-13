@@ -7,6 +7,7 @@ import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract DaoVotePlatform is Ownable2Step {
+    string public name;
 
     error NotStarted();
     error Ended();
@@ -81,9 +82,10 @@ contract DaoVotePlatform is Ownable2Step {
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
     event OperatorSet(address indexed op, bool active);
 
-    constructor(address _owner, address _vlCVX, address _surrogateRegistry, address _delegation)
+    constructor(string memory _name, address _owner, address _vlCVX, address _surrogateRegistry, address _delegation)
         Ownable(_owner)
     {
+        name = _name;
         operators[_owner] = true;
         vlCVX = IvlCVX(_vlCVX);
         surrogateRegistry = SurrogateRegistry(_surrogateRegistry);
@@ -350,5 +352,11 @@ contract DaoVotePlatform is Ownable2Step {
     modifier onlyAcceptedSigner(address _account) {
         if (msg.sender != _account && !surrogateRegistry.isSurrogate(msg.sender, _account)) revert NotSigner();
         _;
+    }
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
     }
 }

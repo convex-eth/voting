@@ -26,7 +26,7 @@ contract CurveVoteExecutorForkTest is ForkSetup {
         (, uint48 endTime,,,) = platform.proposals(pid);
         vm.warp(uint256(endTime) + TIME_BUFFER);
 
-        CurveVoteExecutor executor = new CurveVoteExecutor(
+        CurveVoteExecutor executor = new CurveVoteExecutor("Curve Vote Executor", 
             address(this),
             address(platform),
             VOTE_DELEGATE_EXTENSION,
@@ -41,7 +41,7 @@ contract CurveVoteExecutorForkTest is ForkSetup {
         (DaoVotePlatform platform, uint256 pid) = _votedDaoProposal();
         finalizeDaoProposal(platform, pid);
 
-        CurveVoteExecutor executor = new CurveVoteExecutor(
+        CurveVoteExecutor executor = new CurveVoteExecutor("Curve Vote Executor", 
             address(this),
             address(platform),
             VOTE_DELEGATE_EXTENSION,

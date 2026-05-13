@@ -8,6 +8,7 @@ import "./interface/IvlCVX.sol";
 import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract GaugeVotePlatform is Ownable2Step {
+    string public name;
 
     error NotStarted();
     error Ended();
@@ -419,9 +420,10 @@ contract GaugeVotePlatform is Ownable2Step {
     event OperatorSet(address indexed op, bool active);
     event EqualizerAccountSet(address indexed eq, bool active);
 
-    constructor(address _owner, address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
+    constructor(string memory _name, address _owner, address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
         Ownable(_owner)
     {
+        name = _name;
         operators[_owner] = true;
         vlCVX = IvlCVX(_vlCVX);
         gaugeRegistry = IGaugeRegistry(_gaugeRegistry);
@@ -429,4 +431,9 @@ contract GaugeVotePlatform is Ownable2Step {
         delegation = Delegation(_delegation);
     }
 
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
+    }
 }

@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "./interface/IvlCVX.sol";
 
 contract Delegation {
+    string public name;
     IvlCVX public immutable vlCVX;
     uint32 public immutable epoch0Date;
     uint256 public constant FILL_EPOCHS = 16;
@@ -43,7 +44,8 @@ contract Delegation {
     mapping(address => uint256) public syncedUserEpoch;
     mapping(address => mapping(uint256 => SyncSnapshot)) public syncSnapshots;
 
-    constructor(address _vlCVX) {
+    constructor(string memory _name, address _vlCVX) {
+        name = _name;
         vlCVX = IvlCVX(_vlCVX);
         (, epoch0Date) = vlCVX.epochs(0);
     }
@@ -382,4 +384,10 @@ contract Delegation {
 
     event DelegateSet(address indexed user, address indexed delegate);
     event Synced(address indexed user, address indexed delegate);
+
+    function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
+        _major = 1;
+        _minor = 0;
+        _patch = 0;
+    }
 }

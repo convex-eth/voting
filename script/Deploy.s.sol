@@ -83,14 +83,14 @@ contract Deploy is Script {
         console.log("VotingRegistry:", address(registry));
 
         // ── 3. Deploy Delegation (DAO & Gauge) ──
-        Delegation daoDelegation = new Delegation(VLCVX);
+        Delegation daoDelegation = new Delegation("Dao Delegation", VLCVX);
         console.log("Delegation (DAO):", address(daoDelegation));
 
-        Delegation gaugeDelegation = new Delegation(VLCVX);
+        Delegation gaugeDelegation = new Delegation("Gauge Delegation", VLCVX);
         console.log("Delegation (Gauge):", address(gaugeDelegation));
 
         // ── 4. Deploy SurrogateRegistry ──
-        SurrogateRegistry surrogateRegistry = new SurrogateRegistry();
+        SurrogateRegistry surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
         console.log("SurrogateRegistry:", address(surrogateRegistry));
 
         // ── 5. Register Core Components ──
@@ -125,14 +125,14 @@ contract Deploy is Script {
         curveInitialGauges[8]  = 0x4c18E409Dc8619bFb6a1cB56D114C3f592E0aE79;
         curveInitialGauges[9]  = 0xbFcF63294aD7105dEa65aA58F8AE5BE2D9d0952A;
         curveInitialGauges[10] = 0x18478F737d40ed7DEFe5a9d6F1560d84E283B74e;
-        CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry(address(core), curveInitialGauges);
+        CurveGaugeRegistry curveGaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(core), curveInitialGauges);
         console.log("CurveGaugeRegistry:", address(curveGaugeRegistry));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", GAUGE_REGISTRY, address(curveGaugeRegistry)));
         console.log("Registered CURVE -> GAUGE_REGISTRY");
 
         // ── 7. Deploy CurveDaoVoting ──
-        DaoVotePlatform curveDaoVoting = new DaoVotePlatform(
+        DaoVotePlatform curveDaoVoting = new DaoVotePlatform("Curve Dao Voting", 
             address(core),
             VLCVX,
             address(surrogateRegistry),
@@ -147,7 +147,7 @@ contract Deploy is Script {
         console.log("Set MSIG as operator on CurveDaoVoting");
 
         // ── 8. Deploy CurveGaugeVoting ──
-        GaugeVotePlatform curveGaugeVoting = new GaugeVotePlatform(
+        GaugeVotePlatform curveGaugeVoting = new GaugeVotePlatform("Curve Gauge Voting", 
             address(core),
             VLCVX,
             address(curveGaugeRegistry),
@@ -164,7 +164,7 @@ contract Deploy is Script {
 
         core.execute(address(curveGaugeVoting), abi.encodeWithSignature("setOvertimeAccount(address,bool)", VOTIUM, true));
         console.log("Set Votium as equalizer on CurveGaugeVoting");
-        CurveVoteExecutor curveVoteExecutor = new CurveVoteExecutor(
+        CurveVoteExecutor curveVoteExecutor = new CurveVoteExecutor("Curve Vote Executor", 
             address(core),
             address(curveDaoVoting),
             VOTE_DELEGATE,
@@ -178,7 +178,7 @@ contract Deploy is Script {
         _setGuardian(address(curveVoteExecutor), MSIG);
         console.log("Set MSIG as guardian on CurveVoteExecutor");
 
-        CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor(
+        CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor("Curve Gauge Executor", 
             address(curveGaugeVoting),
             VOTE_DELEGATE
         );
@@ -188,7 +188,7 @@ contract Deploy is Script {
         console.log("Registered CURVE -> GAUGE_EXECUTOR");
 
         // ── 10. Deploy Proposers ──
-        CurveDaoProposer curveDaoProposer = new CurveDaoProposer(
+        CurveDaoProposer curveDaoProposer = new CurveDaoProposer("Curve Dao Proposer", 
             address(core),
             address(curveDaoVoting)
         );
@@ -197,7 +197,7 @@ contract Deploy is Script {
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CURVE", DAO_PROPOSER, address(curveDaoProposer)));
         console.log("Registered CURVE -> DAO_PROPOSER");
 
-        GaugeProposer curveGaugeProposer = new GaugeProposer(
+        GaugeProposer curveGaugeProposer = new GaugeProposer("Curve Gauge Proposer", 
             address(core),
             VLCVX,
             address(curveGaugeVoting)
@@ -216,7 +216,7 @@ contract Deploy is Script {
 
         // ── 12. Deploy F(x) GaugeRegistry ──
         address[] memory fxInitialGauges = new address[](0);
-        FxGaugeRegistry fxGaugeRegistry = new FxGaugeRegistry(address(core), fxInitialGauges);
+        FxGaugeRegistry fxGaugeRegistry = new FxGaugeRegistry("Fx Gauge Registry", address(core), fxInitialGauges);
         console.log("FxGaugeRegistry:", address(fxGaugeRegistry));
 
         core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", GAUGE_REGISTRY, address(fxGaugeRegistry)));
@@ -279,7 +279,7 @@ contract Deploy is Script {
         }
 
         // ── 13. Deploy F(x) DaoVoting ──
-        DaoVotePlatform fxDaoVoting = new DaoVotePlatform(
+        DaoVotePlatform fxDaoVoting = new DaoVotePlatform("Fx Dao Voting", 
             address(core),
             VLCVX,
             address(surrogateRegistry),
@@ -294,7 +294,7 @@ contract Deploy is Script {
         console.log("Set MSIG as operator on FxDaoVoting");
 
         // ── 14. Deploy F(x) GaugeVoting ──
-        GaugeVotePlatform fxGaugeVoting = new GaugeVotePlatform(
+        GaugeVotePlatform fxGaugeVoting = new GaugeVotePlatform("Fx Gauge Voting", 
             address(core),
             VLCVX,
             address(fxGaugeRegistry),
@@ -311,7 +311,7 @@ contract Deploy is Script {
 
         core.execute(address(fxGaugeVoting), abi.encodeWithSignature("setOvertimeAccount(address,bool)", VOTIUM, true));
         console.log("Set Votium as equalizer on FxGaugeVoting");
-        GenericDaoProposer fxDaoProposer = new GenericDaoProposer(
+        GenericDaoProposer fxDaoProposer = new GenericDaoProposer("Fx Dao Proposer", 
             address(core),
             address(fxDaoVoting)
         );
@@ -328,7 +328,7 @@ contract Deploy is Script {
         console.log("Set ConvexDeployer as operator on FxDaoProposer");
 
         // ── 16. Deploy F(x) GaugeProposer ──
-        GaugeProposer fxGaugeProposer = new GaugeProposer(
+        GaugeProposer fxGaugeProposer = new GaugeProposer("Fx Gauge Proposer", 
             address(core),
             VLCVX,
             address(fxGaugeVoting)
@@ -346,7 +346,7 @@ contract Deploy is Script {
         console.log("Set FxGaugeProposer as operator on FxGaugeVoting");
 
         // ── 18. Deploy F(x) GaugeExecutor ──
-        FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor(
+        FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor("Fx Gauge Executor", 
             address(fxGaugeVoting)
         );
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
@@ -355,7 +355,7 @@ contract Deploy is Script {
         console.log("Registered FX -> GAUGE_EXECUTOR");
 
         // ── 19. Deploy Frax DaoVoting ──
-        DaoVotePlatform fraxDaoVoting = new DaoVotePlatform(
+        DaoVotePlatform fraxDaoVoting = new DaoVotePlatform("Frax Dao Voting", 
             address(core),
             VLCVX,
             address(surrogateRegistry),
@@ -370,7 +370,7 @@ contract Deploy is Script {
         console.log("Set MSIG as operator on FraxDaoVoting");
 
         // ── 20. Deploy Frax GenericDaoProposer ──
-        GenericDaoProposer fraxDaoProposer = new GenericDaoProposer(
+        GenericDaoProposer fraxDaoProposer = new GenericDaoProposer("Frax Dao Proposer", 
             address(core),
             address(fraxDaoVoting)
         );
@@ -391,7 +391,7 @@ contract Deploy is Script {
         console.log("Set FraxDaoProposer as operator on FraxDaoVoting");
 
         // ── 22. Deploy Convex DaoVoting ──
-        DaoVotePlatform convexDaoVoting = new DaoVotePlatform(
+        DaoVotePlatform convexDaoVoting = new DaoVotePlatform("Convex Dao Voting", 
             address(core),
             VLCVX,
             address(surrogateRegistry),
@@ -406,7 +406,7 @@ contract Deploy is Script {
         console.log("Set MSIG as operator on ConvexDaoVoting");
 
         // ── 23. Deploy Convex GenericDaoProposer ──
-        GenericDaoProposer convexDaoProposer = new GenericDaoProposer(
+        GenericDaoProposer convexDaoProposer = new GenericDaoProposer("Convex Dao Proposer", 
             address(core),
             address(convexDaoVoting)
         );
@@ -427,7 +427,7 @@ contract Deploy is Script {
         console.log("Set ConvexDaoProposer as operator on ConvexDaoVoting");
 
         // ── 25. Deploy Resupply DaoVoting ──
-        DaoVotePlatform resupplyDaoVoting = new DaoVotePlatform(
+        DaoVotePlatform resupplyDaoVoting = new DaoVotePlatform("Resupply Dao Voting", 
             address(core),
             VLCVX,
             address(surrogateRegistry),
@@ -442,7 +442,7 @@ contract Deploy is Script {
         console.log("Set MSIG as operator on ResupplyDaoVoting");
 
         // ── 26. Deploy ResupplyVoteExecutor ──
-        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor(
+        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor("Resupply Vote Executor", 
             address(core),
             address(resupplyDaoVoting),
             DEFAULT_QUORUM
@@ -456,7 +456,7 @@ contract Deploy is Script {
         console.log("Set MSIG as guardian on ResupplyVoteExecutor");
 
         // ── 27. Deploy ResupplyDaoProposer ──
-        ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer(
+        ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer("Resupply Dao Proposer", 
             address(core),
             address(resupplyDaoVoting)
         );

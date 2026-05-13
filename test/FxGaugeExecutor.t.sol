@@ -40,15 +40,15 @@ contract FxGaugeExecutorTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, gaugeController.code);
 
-        gaugeRegistry = new CurveGaugeRegistry(address(this), new address[](0));
-        surrogateRegistry = new SurrogateRegistry();
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        platform = new GaugeVotePlatform(
+        platform = new GaugeVotePlatform("Convex Gauge Voting", 
             address(this),
             address(vlcvx),
             address(gaugeRegistry),
@@ -59,7 +59,7 @@ contract FxGaugeExecutorTest is Test {
         gaugeVoter = new MockFxGaugeVoter();
         vm.etch(FX_GAUGE_VOTER, address(gaugeVoter).code);
 
-        executor = new FxGaugeExecutor(address(platform));
+        executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();

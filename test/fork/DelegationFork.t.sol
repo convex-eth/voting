@@ -38,7 +38,7 @@ contract DelegationForkTest is ForkSetup {
     function testFork_setDelegateSyncsLiveHolderFutureEpochWeight() public {
         (address holder,,) = liveVlCvxHolder();
         address delegate = makeAddr("delegate");
-        Delegation delegation = new Delegation(VLCVX);
+        Delegation delegation = new Delegation("Convex Delegation", VLCVX);
 
         vm.prank(holder);
         delegation.setDelegate(delegate);

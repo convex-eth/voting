@@ -17,7 +17,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         returns (GaugeVotePlatform platform)
     {
         address[] memory initial = arr(g1, g2);
-        CurveGaugeRegistry registry = new CurveGaugeRegistry(address(this), initial);
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), initial);
         (,, platform) = deployGaugePlatform(address(registry));
     }
 
@@ -53,7 +53,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
     function testFork_partialCurveGaugeBatchDoesNotMarkDone() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
         MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
+        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
 
         executor.executeGaugeVote(pid, arr(g1));
 
@@ -69,7 +69,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
     function testFork_duplicateCurveGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
         MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
+        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
 
         vm.expectRevert();
         executor.executeGaugeVote(pid, arr(g1, g1));
@@ -84,7 +84,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
     function testFork_alreadySubmittedCurveGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
         MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
+        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
 
         executor.executeGaugeVote(pid, arr(g1));
 
@@ -110,7 +110,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
         finalizeGaugeProposal(platform, pid);
 
         MockVoteDelegationExtension voteDelegate = new MockVoteDelegationExtension();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), address(voteDelegate));
+        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
         executor.executeGaugeVote(pid, arr(g1, g2));
 
         uint256 tinyOutput = platform.gaugeTotal(pid, g1) * WEIGHT_BPS / platform.voteTotals(pid);
@@ -129,7 +129,7 @@ contract CurveGaugeExecutorForkTest is ForkSetup {
 
     function testFork_liveCurveAdapterRevertRollsBackLocalState() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedCurveGaugeVote();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor(address(platform), VOTE_DELEGATE_EXTENSION);
+        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), VOTE_DELEGATE_EXTENSION);
 
         vm.expectRevert();
         executor.executeGaugeVote(pid, arr(g1));

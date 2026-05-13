@@ -53,18 +53,18 @@ contract DaoExecutorBoundaryFuzzTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
         daoPlatform =
-            new DaoVotePlatform(address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
+            new DaoVotePlatform("Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
         daoPlatform.setOperator(operator, true);
 
         curveDelegate = new MockVoteDelegationExtension();
-        curveExecutor = new CurveVoteExecutor(address(this), address(daoPlatform), address(curveDelegate), 0);
+        curveExecutor = new CurveVoteExecutor("Curve Vote Executor", address(this), address(daoPlatform), address(curveDelegate), 0);
 
         ProtocolBoundaryMockResupplyStaker staker = new ProtocolBoundaryMockResupplyStaker();
         vm.etch(RESUPPLY_STAKER, address(staker).code);
-        resupplyExecutor = new ResupplyVoteExecutor(address(this), address(daoPlatform), 0);
+        resupplyExecutor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(daoPlatform), 0);
     }
 
     function testFuzz_curveDaoExecutorQuorumAndPercentages(

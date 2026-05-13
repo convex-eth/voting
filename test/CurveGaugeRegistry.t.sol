@@ -29,7 +29,7 @@ contract CurveGaugeRegistryTest is Test {
         legacyGauge = new MockLegacyCurveGauge();
 
         address[] memory initial = new address[](0);
-        registry = new CurveGaugeRegistry(address(this), initial);
+        registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), initial);
 
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(GAUGE_CONTROLLER).setGaugeWeight(address(gauge2), 2000);
@@ -45,7 +45,7 @@ contract CurveGaugeRegistryTest is Test {
         initial[1] = address(gauge2);
         initial[2] = address(gauge5);
 
-        CurveGaugeRegistry reg = new CurveGaugeRegistry(address(this), initial);
+        CurveGaugeRegistry reg = new CurveGaugeRegistry("Curve Gauge Registry", address(this), initial);
 
         assertEq(reg.gaugeLength(), 3);
         assertTrue(reg.isRegisteredGauge(address(gauge1)));
@@ -222,7 +222,7 @@ contract CurveGaugeRegistryTest is Test {
         address[] memory initial = new address[](1);
         initial[0] = address(legacyGauge);
 
-        CurveGaugeRegistry reg = new CurveGaugeRegistry(address(this), initial);
+        CurveGaugeRegistry reg = new CurveGaugeRegistry("Curve Gauge Registry", address(this), initial);
 
         assertTrue(reg.isRegisteredGauge(address(legacyGauge)));
         assertEq(reg.gaugeLength(), 1);

@@ -70,10 +70,10 @@ contract ResupplyDaoProposerTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        daoVotePlatform = new DaoVotePlatform(
+        daoVotePlatform = new DaoVotePlatform("Convex Dao Voting", 
             owner,
             address(vlcvx),
             address(surrogateRegistry),
@@ -85,7 +85,7 @@ contract ResupplyDaoProposerTest is Test {
         mockVoting = new MockResupplyVoting();
         vm.etch(RESUPPLY_VOTING, address(mockVoting).code);
 
-        proposer = new ResupplyDaoProposer(owner, address(daoVotePlatform));
+        proposer = new ResupplyDaoProposer("Resupply Dao Proposer", owner, address(daoVotePlatform));
         daoVotePlatform.setOperator(address(proposer), true);
     }
 

@@ -81,12 +81,12 @@ contract CurveDaoProposerTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation(address(vlcvx));
-        surrogateRegistry = new SurrogateRegistry();
+        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
         registry = new VotingRegistry(owner);
 
-        daoVotePlatform = new DaoVotePlatform(
+        daoVotePlatform = new DaoVotePlatform("Convex Dao Voting", 
             owner,
             address(vlcvx),
             address(surrogateRegistry),
@@ -101,7 +101,7 @@ contract CurveDaoProposerTest is Test {
         mockOwnership = new MockCurveVoting();
         mockParameter = new MockCurveVoting();
 
-        proposer = new CurveDaoProposer(owner, address(daoVotePlatform));
+        proposer = new CurveDaoProposer("Curve Dao Proposer", owner, address(daoVotePlatform));
         daoVotePlatform.setOperator(address(proposer), true);
     }
 

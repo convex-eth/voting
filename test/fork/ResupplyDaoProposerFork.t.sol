@@ -26,7 +26,7 @@ contract ResupplyDaoProposerForkTest is ForkSetup {
 
     function _deployProposer() internal returns (DaoVotePlatform platform, ResupplyDaoProposer proposer) {
         (,, platform) = deployDaoPlatform();
-        proposer = new ResupplyDaoProposer(address(this), address(platform));
+        proposer = new ResupplyDaoProposer("Resupply Dao Proposer", address(this), address(platform));
         platform.setOperator(address(proposer), true);
     }
 
