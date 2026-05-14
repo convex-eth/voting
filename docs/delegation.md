@@ -92,11 +92,11 @@ This means:
 **Users must sync after any vlCVX balance change:**
 
 | Action | Who should sync |
-|---|---|
+|---|---|---|
 | `vlCVX.lock()` (new lock) | The user or anyone calling `sync(user)` |
-| `vlCVX.processExpiredLocks(true)` (relock) | The user — relock changes the balance for future epochs |
+| `vlCVX.relock()` (relock after expiry) | The user — relock changes the balance for future epochs |
 
-Without syncing, the delegate's voting weight on future proposals will not reflect the updated vlCVX balance.
+Without syncing, the delegate's voting weight on future proposals will not reflect the updated vlCVX balance. **Withdrawing expired locks (`processExpiredLocks`) does NOT require a sync** — the lock has already stopped contributing to voting weight.
 
 The voting contracts (`GaugeVotePlatform` and `DaoVotePlatform`) will automatically call `syncAtEpoch(user, epoch)` during `_initBaseInfo` if they detect that the user's vlCVX balance at the proposal epoch (truncated) **differs from** their Delegation weight at that epoch (using `!=` comparison, not `>`). This catches mid-proposal weight changes when the proposal initializes that user.
 

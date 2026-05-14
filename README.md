@@ -117,7 +117,7 @@ address daoDelegation = registry.getAddress("DELEGATION", registry.VOTE_DAO());
 | **Curve** | DaoVotePlatform | GaugeVotePlatform | Full DAO + gauge support |
 | **F(x)** | DaoVotePlatform | GaugeVotePlatform | Full DAO + gauge support |
 | **Frax** | DaoVotePlatform | — | DAO only |
-| **Resupply** | DaoVotePlatform | — | DAO only (Frax ecosystem) |
+| **Resupply** | DaoVotePlatform | — | DAO only |
 | **Convex** | DaoVotePlatform | — | DAO only (internal Convex governance) |
 
 ## Delegation
@@ -249,7 +249,7 @@ Operator-gated. Only addresses with the `operator` role can call `propose()`. Ta
 
 ### ResupplyDaoProposer
 
-Permissionless. Reads proposal data from the Resupply voting contract (`0x1111...`). Uses the Resupply proposal's `createdAt` as the start time (not `block.timestamp`). All proposals are forced to `VoteType.Ownership`. Each Resupply vote ID can only be proposed once. The propose window expires 3 days after `createdAt`.
+Permissionless. Reads proposal data from the Resupply voting contract (`0x1111...`). Uses `block.timestamp` as the start time to ensure the full voting window is always available. All proposals are forced to `VoteType.Ownership`. Each Resupply vote ID can only be proposed once. The propose window expires 3 days after `createdAt`.
 
 ## Executors
 
