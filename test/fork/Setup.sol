@@ -244,7 +244,7 @@ abstract contract ForkSetup is Test, ForkConstants {
         internal
         returns (Delegation delegation, SurrogateRegistry surrogateRegistry, GaugeVotePlatform platform)
     {
-        delegation = new Delegation("Convex Delegation", VLCVX);
+        delegation = new Delegation("Convex Delegation", address(this), VLCVX);
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
         platform = new GaugeVotePlatform("Convex Gauge Voting", address(this), VLCVX, registry, address(surrogateRegistry), address(delegation));
     }
@@ -253,7 +253,7 @@ abstract contract ForkSetup is Test, ForkConstants {
         internal
         returns (Delegation delegation, SurrogateRegistry surrogateRegistry, DaoVotePlatform platform)
     {
-        delegation = new Delegation("Convex Delegation", VLCVX);
+        delegation = new Delegation("Convex Delegation", address(this), VLCVX);
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
         platform = new DaoVotePlatform("Convex Dao Voting", address(this), VLCVX, address(surrogateRegistry), address(delegation));
     }

@@ -2,8 +2,9 @@
 pragma solidity ^0.8.13;
 
 import "./interface/IvlCVX.sol";
+import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
-contract Delegation {
+contract Delegation is Ownable2Step {
     string public name;
     IvlCVX public immutable vlCVX;
     uint32 public immutable epoch0Date;
@@ -37,6 +38,10 @@ contract Delegation {
     error NoDelegate();
     error SelfDelegation();
     error ExpiredLocks();
+    error InitializationClosed();
+    error ArrayLengthMismatch();
+
+    bool public initializationComplete;
 
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
@@ -44,10 +49,41 @@ contract Delegation {
     mapping(address => uint256) public syncedUserEpoch;
     mapping(address => mapping(uint256 => SyncSnapshot)) public syncSnapshots;
 
-    constructor(string memory _name, address _vlCVX) {
+    constructor(string memory _name, address _owner, address _vlCVX) Ownable(_owner) {
         name = _name;
         vlCVX = IvlCVX(_vlCVX);
         (, epoch0Date) = vlCVX.epochs(0);
+    }
+
+    function seedDelegates(address[] calldata _users, address[] calldata _delegates) external onlyOwner {
+        if (initializationComplete) revert InitializationClosed();
+        uint256 len = _users.length;
+        if (len != _delegates.length) revert ArrayLengthMismatch();
+
+        vlCVX.checkpointEpoch();
+        uint256 nextEpoch = vlCVX.epochCount() - 1;
+
+        for (uint256 i = 0; i < len;) {
+            address user = _users[i];
+            address delegate = _delegates[i];
+            if (delegate == address(0)) revert NoDelegate();
+
+            SetDelegateRecord[] storage history = delegateHistory[user];
+            if (history.length != 0) {
+                unchecked { ++i; }
+                continue;
+            }
+
+            history.push(SetDelegateRecord({delegate: delegate, startingEpoch: uint32(nextEpoch)}));
+            _syncUser(user, delegate, nextEpoch, FILL_EPOCHS);
+            emit DelegateSet(user, delegate);
+            unchecked { ++i; }
+        }
+    }
+
+    function completeInitialization() external onlyOwner {
+        initializationComplete = true;
+        emit InitializationComplete();
     }
 
     function setDelegate(address _delegate) external {
@@ -384,6 +420,7 @@ contract Delegation {
 
     event DelegateSet(address indexed user, address indexed delegate);
     event Synced(address indexed user, address indexed delegate);
+    event InitializationComplete();
 
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;

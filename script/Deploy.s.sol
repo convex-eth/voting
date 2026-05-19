@@ -84,10 +84,10 @@ contract Deploy is Script {
         console.log("VotingRegistry:", address(registry));
 
         // ── 3. Deploy Delegation (DAO & Gauge) ──
-        Delegation daoDelegation = new Delegation("Dao Delegation", VLCVX);
+        Delegation daoDelegation = new Delegation("Dao Delegation", address(core), VLCVX);
         console.log("Delegation (DAO):", address(daoDelegation));
 
-        Delegation gaugeDelegation = new Delegation("Gauge Delegation", VLCVX);
+        Delegation gaugeDelegation = new Delegation("Gauge Delegation", address(core), VLCVX);
         console.log("Delegation (Gauge):", address(gaugeDelegation));
 
         // ── 4. Deploy SurrogateRegistry ──

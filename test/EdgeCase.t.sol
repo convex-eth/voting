@@ -26,7 +26,7 @@ contract EdgeCaseTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(this), address(vlcvx));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
         dao = new DaoVotePlatform("Convex Dao Voting", 

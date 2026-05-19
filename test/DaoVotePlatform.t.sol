@@ -30,7 +30,7 @@ contract DaoVotePlatformTest is Test {
         vm.warp(1700000000);
 
         vlcvxImpl = new simpleVlCvx();
-        delegation = new Delegation("Convex Delegation", address(vlcvxImpl));
+        delegation = new Delegation("Convex Delegation", address(this), address(vlcvxImpl));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
         dao = new DaoVotePlatform("Convex Dao Voting", 

@@ -26,7 +26,7 @@ contract DelegationTest is Test {
         vm.warp(1700000000);
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(this), address(vlcvx));
     }
 
     function _currentEpoch() internal view returns (uint256) {

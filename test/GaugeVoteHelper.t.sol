@@ -39,7 +39,7 @@ contract GaugeVoteHelperTest is Test {
 
         simpleVlCvx impl = new simpleVlCvx();
         vlcvx = IvlCVX(address(impl));
-        delegation = new Delegation("Convex Delegation", address(vlcvx));
+        delegation = new Delegation("Convex Delegation", address(this), address(vlcvx));
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
