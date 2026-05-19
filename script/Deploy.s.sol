@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
+import "forge-std/StdJson.sol";
 import "../src/ConvexCore.sol";
 import "../src/GaugeList.sol";
 import "../src/VotingRegistry.sol";
@@ -41,6 +42,7 @@ import "../src/GaugeVoteHelper.sol";
 // ============================================================================
 
 contract Deploy is Script {
+    using stdJson for string;
     address constant VLCVX = 0x72a19342e8F1838460eBFCCEf09F6585e32db86E;
     address constant MSIG = 0xa3C5A1e09150B75ff251c1a7815A07182c3de2FB;
     address constant CONVEX_BOT = 0x724061efDFef4a421e8be05133ad24922D07b5Bf;
@@ -89,6 +91,16 @@ contract Deploy is Script {
 
         Delegation gaugeDelegation = new Delegation("Gauge Delegation", address(core), VLCVX);
         console.log("Delegation (Gauge):", address(gaugeDelegation));
+
+        string memory json = vm.readFile("data/vlcvx_delegations_arrays.json");
+        address[] memory seedUsers = json.readAddressArray(".users");
+        address[] memory seedDelegates = json.readAddressArray(".delegates");
+        core.execute(address(gaugeDelegation), abi.encodeWithSignature("seedDelegates(address[],address[])", seedUsers, seedDelegates));
+        console.log("Seeded Gauge Delegation with", seedUsers.length, "delegates");
+        core.execute(address(gaugeDelegation), abi.encodeWithSignature("completeInitialization()"));
+        console.log("Completed Gauge Delegation initialization");
+        core.execute(address(daoDelegation), abi.encodeWithSignature("completeInitialization()"));
+        console.log("Completed DAO Delegation initialization");
 
         // ── 4. Deploy SurrogateRegistry ──
         SurrogateRegistry surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
