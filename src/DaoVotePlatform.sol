@@ -82,6 +82,12 @@ contract DaoVotePlatform is Ownable2Step {
     event PendingWeightAdjustment(uint256 indexed pid, address indexed delegate, int256 diff);
     event OperatorSet(address indexed op, bool active);
 
+    /// @notice Creates a new DaoVotePlatform contract
+    /// @param _name Contract name identifier
+    /// @param _owner Address of the contract owner
+    /// @param _vlCVX Address of the vlCVX contract
+    /// @param _surrogateRegistry Address of the SurrogateRegistry
+    /// @param _delegation Address of the Delegation contract
     constructor(string memory _name, address _owner, address _vlCVX, address _surrogateRegistry, address _delegation)
         Ownable(_owner)
     {
@@ -92,34 +98,62 @@ contract DaoVotePlatform is Ownable2Step {
         delegation = Delegation(_delegation);
     }
 
+    /// @notice Returns the current epoch start timestamp
+    /// @return Current epoch start time
     function currentEpoch() public view returns (uint256) {
         return block.timestamp / epochDuration * epochDuration;
     }
 
+    /// @notice Returns the total number of proposals
+    /// @return Proposal count
     function proposalCount() external view returns (uint256) {
         return proposals.length;
     }
 
+    /// @notice Returns the number of voters for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return Voter count
     function getVoterCount(uint256 _proposalId) external view returns (uint256) {
         return votedUsers[_proposalId].length;
     }
 
+    /// @notice Returns the voter at a given index for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _index Voter index
+    /// @return Voter address
     function getVoterAtIndex(uint256 _proposalId, uint256 _index) external view returns (address) {
         return votedUsers[_proposalId][_index];
     }
 
+    /// @notice Returns the total yes votes for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return Yes vote total
     function getYes(uint256 _proposalId) external view returns (uint256) {
         return _voteTotals[_proposalId].yes;
     }
 
+    /// @notice Returns the total no votes for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return No vote total
     function getNo(uint256 _proposalId) external view returns (uint256) {
         return _voteTotals[_proposalId].no;
     }
 
+    /// @notice Returns the total votes cast for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return Total vote sum
     function voteTotals(uint256 _proposalId) external view returns (uint256) {
         return uint256(_voteTotals[_proposalId].yes) + uint256(_voteTotals[_proposalId].no);
     }
 
+    /// @notice Returns vote details for a user on a proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _user User address
+    /// @return voted Whether user has voted
+    /// @return yesWeight Yes weight allocation
+    /// @return noWeight No weight allocation
+    /// @return baseWeight User's base voting weight
+    /// @return adjustedWeight User's adjusted weight
     function getVote(uint256 _proposalId, address _user) public view returns (
         bool voted, uint256 yesWeight, uint256 noWeight, uint256 baseWeight, int256 adjustedWeight
     ) {
@@ -131,14 +165,21 @@ contract DaoVotePlatform is Ownable2Step {
         adjustedWeight = u.adjustedWeight;
     }
 
+    /// @notice Checks if a proposal is finalized (voting ended + finalization window)
+    /// @param _proposalId Proposal identifier
+    /// @return True if finalized
     function isFinalized(uint256 _proposalId) public view returns (bool) {
         return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime + finalizationTime;
     }
 
+    /// @notice Checks if a proposal's voting period has ended
+    /// @param _proposalId Proposal identifier
+    /// @return True if voting has ended
     function isFinished(uint256 _proposalId) public view returns (bool) {
         return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime;
     }
 
+    /// @notice Updates vote totals with a delta and yes/no distribution
     function _changeVoteTotals(uint256 _proposalId, int256 _delta, uint256 _yesWeight, uint256 _noWeight) internal {
         VoteTotals storage totals = _voteTotals[_proposalId];
         int256 yesDelta = _delta * int256(_yesWeight) / int256(max_weight);
@@ -155,6 +196,7 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Initializes base voting info for an account
     function _initBaseInfo(address _account, uint256 _proposalId) internal {
         UserInfo memory user = userInfo[_proposalId][_account];
         if (user.delegate != address(0)) return;
@@ -219,6 +261,7 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Casts or updates a vote for an account
     function _vote(address _account, uint256 _yesWeight, uint256 _noWeight) internal {
         uint256 proposalId = proposals.length - 1;
         Proposal storage prop = proposals[proposalId];
@@ -292,6 +335,10 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Casts or updates a vote on the latest proposal
+    /// @param _account Account to vote for
+    /// @param _yesWeight Yes weight allocation (0-10000)
+    /// @param _noWeight No weight allocation (0-10000)
     function vote(address _account, uint256 _yesWeight, uint256 _noWeight) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
         uint8 vs = userInfo[proposalId][_account].voteStatus;
@@ -304,6 +351,11 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Creates a new DAO proposal
+    /// @param _startTime Unix timestamp when voting begins
+    /// @param _endTime Unix timestamp when voting ends
+    /// @param _voteType Type of proposal (Ownership or Parameter)
+    /// @param _proposalId External proposal identifier
     function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
@@ -328,6 +380,7 @@ contract DaoVotePlatform is Ownable2Step {
         emit NewProposal(proposals.length - 1, _startTime, _endTime, _voteType);
     }
 
+    /// @notice Forces the current proposal to end immediately
     function forceEndProposal() public onlyOperator {
         uint256 proposalId = proposals.length - 1;
         if (proposals[proposalId].startTime == 0) revert NotStarted();
@@ -339,6 +392,9 @@ contract DaoVotePlatform is Ownable2Step {
         emit ForceEndProposal(proposalId);
     }
 
+    /// @notice Sets an operator address
+    /// @param _op Operator address
+    /// @param _active True to add, false to remove
     function setOperator(address _op, bool _active) external onlyOwner {
         operators[_op] = _active;
         emit OperatorSet(_op, _active);
@@ -354,6 +410,10 @@ contract DaoVotePlatform is Ownable2Step {
         _;
     }
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;

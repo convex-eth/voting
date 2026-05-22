@@ -49,12 +49,19 @@ contract Delegation is Ownable2Step {
     mapping(address => uint256) public syncedUserEpoch;
     mapping(address => mapping(uint256 => SyncSnapshot)) public syncSnapshots;
 
+    /// @notice Creates a new Delegation contract
+    /// @param _name Contract name identifier
+    /// @param _owner Address of the contract owner
+    /// @param _vlCVX Address of the vlCVX contract
     constructor(string memory _name, address _owner, address _vlCVX) Ownable(_owner) {
         name = _name;
         vlCVX = IvlCVX(_vlCVX);
         (, epoch0Date) = vlCVX.epochs(0);
     }
 
+    /// @notice Seeds initial delegate assignments for multiple users
+    /// @param _users Array of user addresses
+    /// @param _delegates Array of delegate addresses
     function seedDelegates(address[] calldata _users, address[] calldata _delegates) external onlyOwner {
         if (initializationComplete) revert InitializationClosed();
         uint256 len = _users.length;
@@ -81,11 +88,14 @@ contract Delegation is Ownable2Step {
         }
     }
 
+    /// @notice Marks initialization as complete, preventing further seeding
     function completeInitialization() external onlyOwner {
         initializationComplete = true;
         emit InitializationComplete();
     }
 
+    /// @notice Sets or changes a delegate for the caller
+    /// @param _delegate Delegate address to assign
     function setDelegate(address _delegate) external {
         if (_delegate == msg.sender) revert SelfDelegation();
         vlCVX.checkpointEpoch();
@@ -125,6 +135,8 @@ contract Delegation is Ownable2Step {
         emit DelegateSet(msg.sender, _delegate);
     }
 
+    /// @notice Syncs a user's weight for future epochs
+    /// @param _user User address to sync
     function sync(address _user) external {
         vlCVX.checkpointEpoch();
         uint256 currentEpoch = vlCVX.epochCount() - 2;
@@ -171,6 +183,9 @@ contract Delegation is Ownable2Step {
         }
     }
 
+    /// @notice Syncs a user's weight at a specific epoch
+    /// @param _user User address to sync
+    /// @param _epoch Epoch to sync at
     function syncAtEpoch(address _user, uint256 _epoch) external {
         if (_epoch >= vlCVX.epochCount() - 1) return;
 
@@ -222,11 +237,16 @@ contract Delegation is Ownable2Step {
         emit Synced(_user, delegate);
     }
 
+    /// @notice Returns the delegate for a user at a given epoch
+    /// @param _user User address
+    /// @param _epoch Epoch to query
+    /// @return Delegate address at that epoch
     function getDelegateAtEpoch(address _user, uint256 _epoch) external view returns (address) {
         SetDelegateRecord[] storage history = delegateHistory[_user];
         return _getDelegateAtEpoch(history, _epoch);
     }
 
+    /// @notice Finds the delegate for a user at a given epoch from history
     function _getDelegateAtEpoch(SetDelegateRecord[] storage history, uint256 _epoch) internal view returns (address) {
         uint256 len = history.length;
         for (uint256 i = len; i > 0;) {
@@ -238,6 +258,7 @@ contract Delegation is Ownable2Step {
         return address(0);
     }
 
+    /// @notice Syncs a user's weight to a delegate across a range of epochs
     function _syncUser(address _user, address _delegate, uint256 _startEpoch, uint256 _numEpochs) internal {
         uint256 endEpoch;
         unchecked { endEpoch = _startEpoch + _numEpochs; }
@@ -332,6 +353,7 @@ contract Delegation is Ownable2Step {
         emit Synced(_user, _delegate);
     }
 
+    /// @notice Removes a user's weight from a delegate's totals
     function _removeUser(address _user, address _delegate) internal {
         uint256 nextEpoch = vlCVX.epochCount() - 1;
         uint256 endEpoch = syncedUserEpoch[_user];
@@ -383,29 +405,49 @@ contract Delegation is Ownable2Step {
         syncedUserEpoch[_user] = 0;
     }
 
+    /// @notice Returns the current weight of a delegate
+    /// @param _delegate Delegate address
+    /// @return Current delegated weight
     function balanceOf(address _delegate) external view returns (uint256) {
         uint256 currentEpoch = vlCVX.findEpochId(block.timestamp);
         return _readMemWeight(delegateEpochWeights[_delegate][currentEpoch >> 3], currentEpoch & 7);
     }
 
+    /// @notice Returns a delegate's weight at a specific epoch
+    /// @param _epoch Epoch to query
+    /// @param _delegate Delegate address
+    /// @return Delegated weight at that epoch
     function balanceAtEpochOf(uint256 _epoch, address _delegate) external view returns (uint256) {
         return _readMemWeight(delegateEpochWeights[_delegate][_epoch >> 3], _epoch & 7);
     }
 
+    /// @notice Returns a user's own weight at the current epoch
+    /// @param _user User address
+    /// @return User's weight
     function getUserWeight(address _user) external view returns (uint256) {
         uint256 currentEpoch = vlCVX.findEpochId(block.timestamp);
         return _readMemWeight(userEpochWeights[_user][currentEpoch >> 3], currentEpoch & 7);
     }
 
+    /// @notice Returns a user's weight at a specific epoch
+    /// @param _epoch Epoch to query
+    /// @param _user User address
+    /// @return User's weight at that epoch
     function userWeightAtEpochOf(uint256 _epoch, address _user) external view returns (uint256) {
         return _readMemWeight(userEpochWeights[_user][_epoch >> 3], _epoch & 7);
     }
 
+    /// @notice Returns the sync snapshot for a user at an epoch
+    /// @param _user User address
+    /// @param _epoch Epoch to query
+    /// @return preSyncWeight Weight before sync
+    /// @return timestamp Snapshot timestamp
     function getSyncSnapshot(address _user, uint256 _epoch) external view returns (uint256 preSyncWeight, uint256 timestamp) {
         SyncSnapshot memory snap = syncSnapshots[_user][_epoch];
         return (uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.timestamp));
     }
 
+    /// @notice Reads a packed weight from an epoch weighting entry
     function _readMemWeight(EpochWeightingEntry memory entry, uint256 offset) internal pure returns (uint256) {
         uint256 raw;
         assembly {
@@ -414,6 +456,8 @@ contract Delegation is Ownable2Step {
         return raw * WEIGHT_DIVISOR;
     }
 
+    /// @notice Returns the current epoch count from vlCVX
+    /// @return Current epoch count
     function epochCount() external view returns (uint256) {
         return vlCVX.epochCount();
     }
@@ -422,6 +466,10 @@ contract Delegation is Ownable2Step {
     event Synced(address indexed user, address indexed delegate);
     event InitializationComplete();
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;

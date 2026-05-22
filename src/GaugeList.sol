@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 library GaugeList {
         uint256 public constant GAUGE_COUNT = 546;
 
+    /// @notice Returns the full list of known gauge addresses
     function getGauges() internal pure returns (address[] memory) {
         address[] memory gauges = new address[](546);
         gauges[0] = 0x2db0E83599a91b508Ac268a6197b8B14F5e72840;

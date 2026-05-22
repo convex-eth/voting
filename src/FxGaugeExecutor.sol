@@ -27,21 +27,33 @@ contract FxGaugeExecutor {
 
     mapping(uint256 => ExecutionState) internal _executionState;
 
+    /// @notice Returns the number of gauges submitted for a proposal
+    /// @param proposalId Proposal identifier
+    /// @return Gauge count
     function submittedGaugeCount(uint256 proposalId) external view returns (uint256) {
         return _executionState[proposalId].gaugeCount;
     }
 
+    /// @notice Returns the total weight submitted for a proposal
+    /// @param proposalId Proposal identifier
+    /// @return Total weight
     function submittedWeight(uint256 proposalId) external view returns (uint256) {
         return _executionState[proposalId].weight;
     }
 
     event GaugeVoteExecuted(uint256 indexed proposalId, address[] gauges, uint256[] weights);
 
+    /// @notice Creates a new FxGaugeExecutor contract
+    /// @param _name Contract name identifier
+    /// @param _votePlatform Address of the GaugeVotePlatform contract
     constructor(string memory _name, address _votePlatform) {
         name = _name;
         votePlatform = GaugeVotePlatform(_votePlatform);
     }
 
+    /// @notice Executes gauge vote weights on the Fx gauge voter
+    /// @param proposalId Proposal identifier
+    /// @param gauges Array of gauge addresses to submit
     function executeGaugeVote(uint256 proposalId, address[] calldata gauges) external {
         if (!votePlatform.isFinalized(proposalId)) revert NotFinalized();
         if (proposalId != votePlatform.proposalCount() - 1) revert NotLatestProposal();
@@ -88,11 +100,18 @@ contract FxGaugeExecutor {
         emit GaugeVoteExecuted(proposalId, gauges, weights);
     }
 
+    /// @notice Checks if all gauges have been submitted for a proposal
+    /// @param proposalId Proposal identifier
+    /// @return True if all gauges are done
     function isDone(uint256 proposalId) external view returns (bool) {
         if (!votePlatform.isFinalized(proposalId)) return false;
         return _executionState[proposalId].gaugeCount == votePlatform.getGaugeCount(proposalId);
     }
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;

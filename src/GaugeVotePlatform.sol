@@ -81,38 +81,69 @@ contract GaugeVotePlatform is Ownable2Step {
 
     mapping(uint256 => mapping(address => int96)) public pendingWeightAdjustment;
 
+    /// @notice Returns the current epoch start timestamp
+    /// @return Current epoch start time
     function currentEpoch() public view returns (uint256) {
         return block.timestamp / epochDuration * epochDuration;
     }
 
+    /// @notice Returns the total number of proposals
+    /// @return Proposal count
     function proposalCount() external view returns (uint256) {
         return proposals.length;
     }
 
+    /// @notice Returns the number of voters for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return Voter count
     function getVoterCount(uint256 _proposalId) external view returns (uint256) {
         return votedUsers[_proposalId].length;
     }
 
+    /// @notice Returns the voter at a given index for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _index Voter index
+    /// @return Voter address
     function getVoterAtIndex(uint256 _proposalId, uint256 _index) external view returns (address) {
         return votedUsers[_proposalId][_index];
     }
 
+    /// @notice Returns the total weight allocated to a gauge
+    /// @param _proposalId Proposal identifier
+    /// @param _gauge Gauge address
+    /// @return Total weight
     function gaugeTotal(uint256 _proposalId, address _gauge) external view returns (uint256) {
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         if (idx == 0) return 0;
         return _gaugeEntries[_proposalId][idx - 1].totalWeight;
     }
 
+    /// @notice Returns the number of gauges with votes for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @return Gauge count
     function getGaugeCount(uint256 _proposalId) external view returns (uint256) {
         return _gaugeEntries[_proposalId].length;
     }
 
+    /// @notice Returns a gauge entry by index for a proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _index Gauge entry index
+    /// @return gauge Gauge address
+    /// @return totalWeight Total weight allocated
     function getGaugeEntry(uint256 _proposalId, uint256 _index) external view returns (address gauge, uint256 totalWeight) {
         GaugeTotalEntry storage entry = _gaugeEntries[_proposalId][_index];
         gauge = entry.gauge;
         totalWeight = entry.totalWeight;
     }
 
+    /// @notice Returns vote details for a user on a proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _user User address
+    /// @return gauges Array of voted gauges
+    /// @return weights Array of weights per gauge
+    /// @return voted Whether user has voted
+    /// @return baseWeight User's base voting weight
+    /// @return adjustedWeight User's adjusted weight
     function getVote(uint256 _proposalId, address _user) public view returns (address[] memory gauges, uint256[] memory weights, bool voted, uint256 baseWeight, int256 adjustedWeight) {
         GaugeVote[] storage userVotes = votes[_proposalId][_user];
         uint256 len = userVotes.length;
@@ -129,6 +160,7 @@ contract GaugeVotePlatform is Ownable2Step {
         adjustedWeight = u.adjustedWeight;
     }
 
+    /// @notice Initializes base voting info for an account
     function _initBaseInfo(address _account, uint256 _proposalId) internal {
         UserInfo memory user = userInfo[_proposalId][_account];
         if (user.delegate != address(0)) return;
@@ -201,6 +233,7 @@ contract GaugeVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Casts or updates a gauge vote for an account
     function _vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) internal {
         uint256 proposalId = proposals.length - 1;
         Proposal storage prop = proposals[proposalId];
@@ -303,6 +336,7 @@ contract GaugeVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Updates or inserts the total weight for a gauge
     function _changeGaugeTotal(uint256 _proposalId, address _gauge, int256 _changeValue) internal {
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         uint256 absVal;
@@ -342,6 +376,10 @@ contract GaugeVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Casts or updates a gauge vote on the latest proposal
+    /// @param _account Account to vote for
+    /// @param _gauges Array of gauge addresses
+    /// @param _weights Array of weights per gauge
     function vote(address _account, address[] calldata _gauges, uint256[] calldata _weights) external onlyAcceptedSigner(_account) {
         uint256 proposalId = proposals.length - 1;
         uint8 vs = userInfo[proposalId][_account].voteStatus;
@@ -354,10 +392,16 @@ contract GaugeVotePlatform is Ownable2Step {
         }
     }
 
+    /// @notice Checks if a proposal is finalized (voting ended + overtime window)
+    /// @param _proposalId Proposal identifier
+    /// @return True if finalized
     function isFinalized(uint256 _proposalId) public view returns (bool) {
         return proposals[_proposalId].endTime > 0 && block.timestamp > proposals[_proposalId].endTime + overtime;
     }
 
+    /// @notice Creates a new gauge proposal
+    /// @param _startTime Unix timestamp when voting begins
+    /// @param _endTime Unix timestamp when voting ends
     function createProposal(uint256 _startTime, uint256 _endTime) public onlyOperator {
         uint256 pCnt = proposals.length;
         if (pCnt > 0) {
@@ -380,6 +424,7 @@ contract GaugeVotePlatform is Ownable2Step {
         emit NewProposal(proposals.length - 1, _startTime, _endTime);
     }
 
+    /// @notice Forces the current proposal to end immediately
     function forceEndProposal() public onlyOperator {
         uint256 proposalId = proposals.length - 1;
         if (proposals[proposalId].startTime == 0) revert NotStarted();
@@ -391,11 +436,17 @@ contract GaugeVotePlatform is Ownable2Step {
         emit ForceEndProposal(proposalId);
     }
 
+    /// @notice Sets an operator address
+    /// @param _op Operator address
+    /// @param _active True to add, false to remove
     function setOperator(address _op, bool _active) external onlyOwner {
         operators[_op] = _active;
         emit OperatorSet(_op, _active);
     }
 
+    /// @notice Sets an equalizer account (gets overtime extension)
+    /// @param _eq Account address
+    /// @param _active True to enable overtime, false to disable
     function setOvertimeAccount(address _eq, bool _active) external onlyOwner {
         equalizerAccounts[_eq] = _active;
         emit EqualizerAccountSet(_eq, _active);
@@ -420,6 +471,13 @@ contract GaugeVotePlatform is Ownable2Step {
     event OperatorSet(address indexed op, bool active);
     event EqualizerAccountSet(address indexed eq, bool active);
 
+    /// @notice Creates a new GaugeVotePlatform contract
+    /// @param _name Contract name identifier
+    /// @param _owner Address of the contract owner
+    /// @param _vlCVX Address of the vlCVX contract
+    /// @param _gaugeRegistry Address of the gauge registry
+    /// @param _surrogateRegistry Address of the SurrogateRegistry
+    /// @param _delegation Address of the Delegation contract
     constructor(string memory _name, address _owner, address _vlCVX, address _gaugeRegistry, address _surrogateRegistry, address _delegation)
         Ownable(_owner)
     {
@@ -431,6 +489,10 @@ contract GaugeVotePlatform is Ownable2Step {
         delegation = Delegation(_delegation);
     }
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;

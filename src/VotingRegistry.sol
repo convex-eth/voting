@@ -17,8 +17,14 @@ contract VotingRegistry is Ownable2Step {
 
     mapping(string => mapping(uint8 => address)) public getAddress;
 
+    /// @notice Creates a new VotingRegistry contract
+    /// @param _owner Address of the contract owner
     constructor(address _owner) Ownable(_owner) {}
 
+    /// @notice Registers or updates a voting contract address
+    /// @param _platform Platform name
+    /// @param _voteType Vote type identifier
+    /// @param _votingContract Address of the voting contract
     function setVotingContract(string calldata _platform, uint8 _voteType, address _votingContract) external onlyOwner {
         getAddress[_platform][_voteType] = _votingContract;
         emit VotingContractSet(_platform, _voteType, _votingContract);

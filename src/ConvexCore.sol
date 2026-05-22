@@ -16,6 +16,8 @@ contract ConvexCore {
         _;
     }
 
+    /// @notice Creates a new ConvexCore contract with initial operators
+    /// @param _initialOperators Array of initial operator addresses
     constructor(address[] memory _initialOperators) {
         if (_initialOperators.length == 0) revert("No operators");
         for (uint256 i = 0; i < _initialOperators.length; i++) {
@@ -28,10 +30,16 @@ contract ConvexCore {
         }
     }
 
+    /// @notice Returns the number of operators
+    /// @return Total operator count
     function operatorCount() external view returns (uint256) {
         return operatorList.length;
     }
 
+    /// @notice Executes a call through the contract
+    /// @param target Target contract address
+    /// @param data Encoded function call data
+    /// @return returnData Return data from the call
     function execute(address target, bytes calldata data) external onlyOperator returns (bytes memory) {
         (bool success, bytes memory returnData) = target.call(data);
         emit Executed(target, data, success, returnData);
@@ -47,6 +55,9 @@ contract ConvexCore {
         return returnData;
     }
 
+    /// @notice Adds or removes an operator
+    /// @param _operator Operator address to modify
+    /// @param _active True to add, false to remove
     function setOperator(address _operator, bool _active) external onlyOperator {
         if (_operator == address(0)) revert ZeroAddress();
         if (_active) {

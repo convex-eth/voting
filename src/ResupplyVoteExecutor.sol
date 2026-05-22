@@ -38,6 +38,11 @@ contract ResupplyVoteExecutor is Ownable2Step {
     event GuardianSet(address indexed guardian, bool active);
     event QuorumSet(uint256 quorumBps);
 
+    /// @notice Creates a new ResupplyVoteExecutor contract
+    /// @param _name Contract name identifier
+    /// @param _owner Address of the contract owner
+    /// @param _votePlatform Address of the DaoVotePlatform contract
+    /// @param _quorumBps Minimum quorum in basis points
     constructor(string memory _name, address _owner, address _votePlatform, uint256 _quorumBps) Ownable(_owner) {
         name = _name;
         if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
@@ -45,6 +50,8 @@ contract ResupplyVoteExecutor is Ownable2Step {
         quorumBps = _quorumBps;
     }
 
+    /// @notice Executes a finalized DAO vote on Resupply
+    /// @param _proposalId Proposal identifier to execute
     function executeDaoVote(uint256 _proposalId) external {
         if (executed[_proposalId]) revert AlreadyExecuted();
         if (!votePlatform.isFinished(_proposalId)) revert NotFinished();
@@ -76,25 +83,39 @@ contract ResupplyVoteExecutor is Ownable2Step {
         emit DaoVoteExecuted(_proposalId, yay, nay);
     }
 
+    /// @notice Checks if a proposal has been executed
+    /// @param _proposalId Proposal identifier
+    /// @return True if proposal was executed
     function isDone(uint256 _proposalId) external view returns (bool) {
         return executed[_proposalId];
     }
 
+    /// @notice Sets a guardian address
+    /// @param _guardian Guardian address
+    /// @param _active True to add, false to remove
     function setGuardian(address _guardian, bool _active) external onlyOwner {
         guardians[_guardian] = _active;
         emit GuardianSet(_guardian, _active);
     }
 
+    /// @notice Sets the quorum threshold in basis points
+    /// @param _quorumBps Quorum in basis points
     function setQuorum(uint256 _quorumBps) external onlyOwner {
         if (_quorumBps > MAX_QUORUM_BPS) revert InvalidQuorum();
         quorumBps = _quorumBps;
         emit QuorumSet(_quorumBps);
     }
 
+    /// @notice Claims and stakes rewards from the Resupply staker
+    /// @return amount Amount claimed and staked
     function claimAndStake() external returns (uint256 amount) {
         amount = IResupplyStaker(RESUPPLY_STAKER).claimAndStake();
     }
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;

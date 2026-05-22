@@ -8,11 +8,20 @@ contract GaugeVoteHelper {
     string public name;
     Delegation public immutable delegation;
 
+    /// @notice Creates a new GaugeVoteHelper contract
+    /// @param _name Contract name identifier
+    /// @param _delegation Address of the Delegation contract
     constructor(string memory _name, address _delegation) {
         name = _name;
         delegation = Delegation(_delegation);
     }
 
+    /// @notice Computes contributing weights for users delegating to a given delegate
+    /// @param _proposalId Proposal identifier
+    /// @param _delegate Delegate address to check delegation against
+    /// @param _users Array of user addresses to compute weights for
+    /// @param _gaugePlatform GaugeVotePlatform contract reference
+    /// @return weights Array of contributing weights for each user
     function getContributingWeights(
         uint256 _proposalId,
         address _delegate,
@@ -56,6 +65,10 @@ contract GaugeVoteHelper {
         return weights;
     }
 
+    /// @notice Returns the contract version
+    /// @return _major Major version
+    /// @return _minor Minor version
+    /// @return _patch Patch version
     function version() external pure returns (uint256 _major, uint256 _minor, uint256 _patch) {
         _major = 1;
         _minor = 0;
