@@ -142,13 +142,6 @@ contract DaoVotePlatformTest is Test {
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
     }
 
-    function test_cannotCreateBeforePreviousEnds() public {
-        uint256 pid = _createProposal();
-        vm.prank(operator);
-        vm.expectRevert(DaoVotePlatform.PrevNotEnded.selector);
-        dao.createProposal(vm.getBlockTimestamp() + 5 days, vm.getBlockTimestamp() + 9 days, DaoVotePlatform.VoteType.Parameter, 1);
-    }
-
     function test_forceEndProposal() public {
         uint256 pid = _createProposal();
         vm.prank(operator);

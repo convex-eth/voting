@@ -357,11 +357,6 @@ contract DaoVotePlatform is Ownable2Step {
     /// @param _voteType Type of proposal (Ownership or Parameter)
     /// @param _proposalId External proposal identifier
     function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
-        uint256 pCnt = proposals.length;
-        if (pCnt > 0) {
-            if (block.timestamp <= proposals[pCnt - 1].endTime + finalizationTime) revert PrevNotEnded();
-        }
-
         if (_endTime <= _startTime) revert BadTime();
         if (_endTime <= block.timestamp) revert BadTime();
         if (_endTime - _startTime < MIN_PROPOSAL_DURATION) revert BadTime();
