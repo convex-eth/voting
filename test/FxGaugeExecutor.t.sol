@@ -12,6 +12,14 @@ import "../src/interface/IvlCVX.sol";
 import "./mocks/simpleVlCvx.sol";
 import "./mocks/MockGauges.sol";
 
+contract Forwarder {
+    function execute(address target, bytes calldata data) external returns (bytes memory) {
+        (bool ok, bytes memory ret) = target.call(data);
+        if (!ok) revert("Forwarder: call failed");
+        return ret;
+    }
+}
+
 contract FxGaugeExecutorTest is Test {
     IvlCVX internal vlcvx;
     Delegation internal delegation;
@@ -59,7 +67,14 @@ contract FxGaugeExecutorTest is Test {
         gaugeVoter = new MockFxGaugeVoter();
         vm.etch(FX_GAUGE_VOTER, address(gaugeVoter).code);
 
-        executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        Forwarder forwarder = new Forwarder();
+        executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(forwarder));
+
+        vm.mockCall(
+            0xd11a4Ee017cA0BECA8FA45fF2abFe9C6267b7881,
+            abi.encodeWithSelector(IFxVoterProxy.operator.selector),
+            abi.encode(FX_GAUGE_VOTER)
+        );
 
         gauge1 = new MockCurveGauge();
         gauge2 = new MockCurveGauge();

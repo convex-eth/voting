@@ -45,7 +45,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
 
     function testFork_partialFxGaugeBatchDoesNotMarkDone() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedFxGaugeVote();
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
         _mockFxGaugeVoteCall();
 
         executor.executeGaugeVote(pid, arr(g1));
@@ -58,7 +58,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
 
     function testFork_duplicateFxGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedFxGaugeVote();
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
         _mockFxGaugeVoteCall();
 
         vm.expectRevert();
@@ -72,7 +72,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
 
     function testFork_alreadySubmittedFxGaugeBatchReverts() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedFxGaugeVote();
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
         _mockFxGaugeVoteCall();
 
         executor.executeGaugeVote(pid, arr(g1));
@@ -97,7 +97,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
         voteGaugeAsHolder(platform, holder, arr(g1, g2), weights(1, 9999));
         finalizeGaugeProposal(platform, pid);
 
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
         _mockFxGaugeVoteCall();
         executor.executeGaugeVote(pid, arr(g1, g2));
 
@@ -112,7 +112,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
 
     function testFork_liveFxAdapterRevertRollsBackLocalState() public {
         (GaugeVotePlatform platform, uint256 pid, address g1,) = _finalizedFxGaugeVote();
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
 
         vm.expectRevert();
         executor.executeGaugeVote(pid, arr(g1));

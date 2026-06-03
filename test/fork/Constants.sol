@@ -9,6 +9,7 @@ abstract contract ForkConstants {
     address internal constant CURVE_PARAMETER_VOTING = 0xBCfF8B0b9419b9A88c44546519b1e909cF330399;
     address internal constant FX_GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
     address internal constant FX_GAUGE_VOTER = 0xAffe966B27ba3E4Ebb8A0eC124C7b7019CC762f8;
+    address internal constant FX_VOTER_PROXY = 0xd11a4Ee017cA0BECA8FA45fF2abFe9C6267b7881;
     address internal constant RESUPPLY_REGISTRY = 0x10101010E0C3171D894B71B3400668aF311e7D94;
     address internal constant RESUPPLY_VOTER = 0x11111111063874cE8dC6232cb5C1C849359476E6;
     address internal constant RESUPPLY_PERMA_STAKER = 0xCCCCCccc94bFeCDd365b4Ee6B86108fC91848901;

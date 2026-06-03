@@ -4,6 +4,11 @@ pragma solidity ^0.8.13;
 import "./GaugeVotePlatform.sol";
 import "./interface/IvlCVX.sol";
 import "./interface/IFxGaugeVoter.sol";
+import "./ConvexCore.sol";
+
+interface IFxVoterProxy {
+    function operator() external view returns (address);
+}
 
 contract FxGaugeExecutor {
     string public name;
@@ -16,9 +21,10 @@ contract FxGaugeExecutor {
     uint256 public constant EPOCH_DURATION = 86400 * 7;
 
     address public constant gaugeController = address(0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37);
-    address public constant gaugeVoter = address(0xAffe966B27ba3E4Ebb8A0eC124C7b7019CC762f8);
+    address public constant fxVoterProxy = address(0xd11a4Ee017cA0BECA8FA45fF2abFe9C6267b7881);
 
     GaugeVotePlatform public immutable votePlatform;
+    ConvexCore public immutable convexCore;
 
     struct ExecutionState {
         uint128 gaugeCount;
@@ -46,9 +52,11 @@ contract FxGaugeExecutor {
     /// @notice Creates a new FxGaugeExecutor contract
     /// @param _name Contract name identifier
     /// @param _votePlatform Address of the GaugeVotePlatform contract
-    constructor(string memory _name, address _votePlatform) {
+    /// @param _convexCore Address of the ConvexCore contract
+    constructor(string memory _name, address _votePlatform, address _convexCore) {
         name = _name;
         votePlatform = GaugeVotePlatform(_votePlatform);
+        convexCore = ConvexCore(_convexCore);
     }
 
     /// @notice Executes gauge vote weights on the Fx gauge voter
@@ -96,7 +104,11 @@ contract FxGaugeExecutor {
 
         _executionState[proposalId] = ExecutionState(uint128(newCount), uint128(newWeight));
 
-        IFxGaugeVoter(gaugeVoter).voteGaugeWeight(gaugeController, gauges, weights);
+        address booster = IFxVoterProxy(fxVoterProxy).operator();
+        convexCore.execute(
+            booster,
+            abi.encodeWithSelector(IFxGaugeVoter.voteGaugeWeight.selector, gaugeController, gauges, weights)
+        );
         emit GaugeVoteExecuted(proposalId, gauges, weights);
     }
 

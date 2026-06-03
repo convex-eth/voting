@@ -368,7 +368,8 @@ contract Deploy is Script {
 
         // ── 18. Deploy F(x) GaugeExecutor ──
         FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor("Fx Gauge Executor", 
-            address(fxGaugeVoting)
+            address(fxGaugeVoting),
+            address(core)
         );
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
 

@@ -139,7 +139,7 @@ contract GaugeExecutorForkFuzzTest is ForkSetup {
         finalizeGaugeProposal(platform, pid);
 
         vm.mockCall(FX_GAUGE_VOTER, abi.encodeWithSelector(IFxGaugeVoter.voteGaugeWeight.selector), bytes(""));
-        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform));
+        FxGaugeExecutor executor = new FxGaugeExecutor("Fx Gauge Executor", address(platform), address(this));
         executor.executeGaugeVote(pid, arr(g1, g2));
 
         assertEq(executor.submittedGaugeCount(pid), 2);

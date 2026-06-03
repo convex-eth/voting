@@ -38,7 +38,7 @@ contract DeployAddressForkTest is ForkSetup {
         CurveGaugeRegistry curveRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
         FxGaugeRegistry fxRegistry = new FxGaugeRegistry("Fx Gauge Registry", address(this), new address[](0));
         CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor("Curve Gauge Executor", address(0x1234), VOTE_DELEGATE_EXTENSION);
-        FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor("Fx Gauge Executor", address(0x1234));
+        FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor("Fx Gauge Executor", address(0x1234), address(this));
         (,, DaoVotePlatform daoPlatform) = deployDaoPlatform();
         CurveDaoProposer curveDaoProposer = new CurveDaoProposer("Curve Dao Proposer", address(this), address(daoPlatform));
         ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer("Resupply Dao Proposer", address(this), address(daoPlatform));
@@ -48,7 +48,7 @@ contract DeployAddressForkTest is ForkSetup {
         assertEq(fxRegistry.gaugeController(), FX_GAUGE_CONTROLLER);
         assertEq(address(curveGaugeExecutor.voteDelegate()), VOTE_DELEGATE_EXTENSION);
         assertEq(fxGaugeExecutor.gaugeController(), FX_GAUGE_CONTROLLER);
-        assertEq(fxGaugeExecutor.gaugeVoter(), FX_GAUGE_VOTER);
+        assertEq(fxGaugeExecutor.fxVoterProxy(), FX_VOTER_PROXY);
         assertEq(curveDaoProposer.CURVE_OWNERSHIP(), CURVE_OWNERSHIP_VOTING);
         assertEq(curveDaoProposer.CURVE_PARAMETER(), CURVE_PARAMETER_VOTING);
         assertEq(resupplyDaoProposer.RESUPPLY_VOTING(), RESUPPLY_VOTER);
