@@ -294,9 +294,9 @@ abstract contract ForkSetup is Test, ForkConstants {
         platform.vote(holder, gauges, voteWeights);
     }
 
-    function voteDaoAsHolder(DaoVotePlatform platform, address holder, uint256 yesWeight, uint256 noWeight) internal {
+    function voteDaoAsHolder(DaoVotePlatform platform, uint256 pid, address holder, uint256 yesWeight, uint256 noWeight) internal {
         vm.prank(holder);
-        platform.vote(holder, yesWeight, noWeight);
+        platform.vote(pid, holder, yesWeight, noWeight);
     }
 
     function arr(address a) internal pure returns (address[] memory values) {

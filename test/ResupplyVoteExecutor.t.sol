@@ -86,12 +86,15 @@ contract ResupplyVoteExecutorTest is Test {
         vm.warp(currentEpoch + WEEK + 1);
     }
 
+    uint256 internal currentPid;
+
     function _createProposal() internal returns (uint256) {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         daoVotePlatform.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Ownership, 1);
         uint256 pid = daoVotePlatform.proposalCount() - 1;
+        currentPid = pid;
         vm.warp(startTime);
         return pid;
     }
@@ -108,7 +111,7 @@ contract ResupplyVoteExecutorTest is Test {
 
     function _voteYes(address user) internal {
         vm.prank(user);
-        daoVotePlatform.vote(user, 10000, 0);
+        daoVotePlatform.vote(currentPid, user, 10000, 0);
     }
 
     function test_executeDaoVote() public {

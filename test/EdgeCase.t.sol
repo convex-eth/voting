@@ -77,10 +77,10 @@ contract EdgeCaseTest is Test {
         vm.warp(startTime);
 
         vm.prank(delegate1);
-        dao.vote(delegate1, 10000, 0);
+        dao.vote(pid, delegate1, 10000, 0);
 
         vm.prank(alice);
-        dao.vote(alice, 10000, 0);
+        dao.vote(pid, alice, 10000, 0);
 
         uint256 voteTotals = dao.voteTotals(pid);
 
@@ -118,10 +118,10 @@ contract EdgeCaseTest is Test {
         delegation.sync(alice);
 
         vm.prank(delegate1);
-        dao.vote(delegate1, 10000, 0);
+        dao.vote(pid, delegate1, 10000, 0);
 
         vm.prank(alice);
-        dao.vote(alice, 10000, 0);
+        dao.vote(pid, alice, 10000, 0);
 
         uint256 voteTotals = dao.voteTotals(pid);
 

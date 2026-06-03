@@ -19,7 +19,7 @@ contract VotingActor {
         delegation.setDelegate(delegate);
     }
     function daoVote(DaoVotePlatform dao, address account, uint256 yesWeight, uint256 noWeight) external {
-        dao.vote(account, yesWeight, noWeight);
+        dao.vote(dao.proposalCount() - 1, account, yesWeight, noWeight);
     }
     function gaugeVote(GaugeVotePlatform platform, address account, address[] calldata gauges, uint256[] calldata weights) external {
         platform.vote(account, gauges, weights);

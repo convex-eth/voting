@@ -62,12 +62,15 @@ contract CurveVoteExecutorTest is Test {
         vm.warp(currentEpoch + WEEK + 1);
     }
 
+    uint256 internal currentPid;
+
     function _createProposal(DaoVotePlatform.VoteType vt, uint256 proposalId) internal returns (uint256) {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, vt, proposalId);
         uint256 pid = dao.proposalCount() - 1;
+        currentPid = pid;
         vm.warp(startTime);
         return pid;
     }
@@ -84,17 +87,17 @@ contract CurveVoteExecutorTest is Test {
 
     function _voteYes(address user) internal {
         vm.prank(user);
-        dao.vote(user, 10000, 0);
+        dao.vote(currentPid, user, 10000, 0);
     }
 
     function _voteNo(address user) internal {
         vm.prank(user);
-        dao.vote(user, 0, 10000);
+        dao.vote(currentPid, user, 0, 10000);
     }
 
     function _vote(address user, uint256 yw, uint256 nw) internal {
         vm.prank(user);
-        dao.vote(user, yw, nw);
+        dao.vote(currentPid, user, yw, nw);
     }
 
     // ========== Access Control ==========

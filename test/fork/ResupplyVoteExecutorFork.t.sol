@@ -14,7 +14,7 @@ contract ResupplyVoteExecutorForkTest is ForkSetup {
         (address holder,,) = liveVlCvxHolder();
         (,, platform) = deployDaoPlatform();
         pid = createDaoProposal(platform, 1 days, 200_001);
-        voteDaoAsHolder(platform, holder, 6500, 3500);
+        voteDaoAsHolder(platform, pid, holder, 6500, 3500);
     }
 
     function testFork_liveResupplyExecutorDependenciesHaveExpectedShape() public view {

@@ -155,7 +155,7 @@ contract DaoExecutorBoundaryFuzzTest is Test {
 
         vm.warp(startTime);
         vm.prank(alice);
-        daoPlatform.vote(alice, yesWeight, 10_000 - yesWeight);
+        daoPlatform.vote(pid, alice, yesWeight, 10_000 - yesWeight);
 
         vm.warp(endTime + daoPlatform.finalizationTime() + 1);
     }

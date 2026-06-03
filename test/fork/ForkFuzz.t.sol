@@ -161,7 +161,7 @@ contract LazyDelegationForkFuzzTest is ForkSetup {
         (,, DaoVotePlatform platform) = deployDaoPlatform();
 
         uint256 pid = createDaoProposal(platform, 1 days, 400_001);
-        voteDaoAsHolder(platform, holder, yesWeight, noWeight);
+        voteDaoAsHolder(platform, pid, holder, yesWeight, noWeight);
 
         uint256 expectedYes = holderWeight * yesWeight / WEIGHT_BPS;
         assertEq(platform.voteTotals(pid), holderWeight);
@@ -203,7 +203,7 @@ contract DaoExecutorForkFuzzTest is ForkSetup {
         (,, platform) = deployDaoPlatform();
 
         pid = createDaoProposal(platform, 1 days, 500_001);
-        voteDaoAsHolder(platform, holder, yesWeight, noWeight);
+        voteDaoAsHolder(platform, pid, holder, yesWeight, noWeight);
         finalizeDaoProposal(platform, pid);
 
         (,, uint48 epoch,,) = platform.proposals(pid);

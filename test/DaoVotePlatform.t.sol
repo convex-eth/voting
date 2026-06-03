@@ -56,12 +56,15 @@ contract DaoVotePlatformTest is Test {
         vm.warp(currentEpoch + WEEK + 1);
     }
 
+    uint256 internal currentPid;
+
     function _createProposal() internal returns (uint256) {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;
         vm.prank(operator);
         dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 1);
         uint256 pid = dao.proposalCount() - 1;
+        currentPid = pid;
         (,, proposalEpoch,,) = dao.proposals(pid);
         vm.warp(startTime);
         return pid;
@@ -74,22 +77,22 @@ contract DaoVotePlatformTest is Test {
 
     function _voteYes(address user) internal {
         vm.prank(user);
-        dao.vote(user, 10000, 0);
+        dao.vote(currentPid, user, 10000, 0);
     }
 
     function _voteNo(address user) internal {
         vm.prank(user);
-        dao.vote(user, 0, 10000);
+        dao.vote(currentPid, user, 0, 10000);
     }
 
     function _vote(address user, uint256 yesW, uint256 noW) internal {
         vm.prank(user);
-        dao.vote(user, yesW, noW);
+        dao.vote(currentPid, user, yesW, noW);
     }
 
     function _voteSurrogate(address signer, address user, uint256 yesW, uint256 noW) internal {
         vm.prank(signer);
-        dao.vote(user, yesW, noW);
+        dao.vote(currentPid, user, yesW, noW);
     }
 
     // ========== Proposal Tests ==========
@@ -266,7 +269,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.Ended.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(pid, alice, 10000, 0);
     }
 
     function test_cannotVoteBeforeStart() public {
@@ -280,7 +283,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.NotStarted.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(0, alice, 10000, 0);
     }
 
     function test_cannotVoteWithoutWeight() public {
@@ -289,7 +292,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.NoWeight.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(pid, alice, 10000, 0);
     }
 
     function test_cannotExceedMaxWeight() public {
@@ -299,7 +302,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.MaxWeight.selector);
-        dao.vote(alice, 6000, 5000);
+        dao.vote(pid, alice, 6000, 5000);
     }
 
     function test_revoteYesToYes() public {
@@ -510,7 +513,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(surrogate);
         vm.expectRevert(DaoVotePlatform.NotVoteAuth.selector);
-        dao.vote(alice, 0, 10000);
+        dao.vote(currentPid, alice, 0, 10000);
     }
 
     function test_randomAddressCannotVoteForOthers() public {
@@ -520,7 +523,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(bob);
         vm.expectRevert(DaoVotePlatform.NotSigner.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(currentPid, alice, 10000, 0);
     }
 
     // ========== forceEnd ==========
@@ -535,7 +538,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.Ended.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(currentPid, alice, 10000, 0);
     }
 
     // ========== View functions ==========
@@ -1125,20 +1128,20 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         vm.prank(surrogate);
-        dao.vote(alice, 10000, 0);
-        assertEq(dao.getYes(pid), 1000 * WD);
+        dao.vote(currentPid, alice, 10000, 0);
+        assertEq(dao.getYes(currentPid), 1000 * WD);
 
-        (bool voted,,, uint256 bw,) = dao.getVote(pid, alice);
+        (bool voted,,, uint256 bw,) = dao.getVote(currentPid, alice);
         assertTrue(voted);
         assertEq(bw, 1000 * WD);
 
         _voteNo(alice);
-        assertEq(dao.getNo(pid), 1000 * WD);
-        assertEq(dao.getYes(pid), 0);
+        assertEq(dao.getNo(currentPid), 1000 * WD);
+        assertEq(dao.getYes(currentPid), 0);
 
         vm.prank(surrogate);
         vm.expectRevert(DaoVotePlatform.NotVoteAuth.selector);
-        dao.vote(alice, 10000, 0);
+        dao.vote(currentPid, alice, 10000, 0);
     }
 
     // ========== Gap #9: Weight decrease on revote ==========

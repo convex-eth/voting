@@ -14,7 +14,7 @@ contract CurveVoteExecutorForkTest is ForkSetup {
         (address holder,,) = liveVlCvxHolder();
         (,, platform) = deployDaoPlatform();
         pid = createDaoProposal(platform, 1 days, 100_001);
-        voteDaoAsHolder(platform, holder, 7000, 3000);
+        voteDaoAsHolder(platform, pid, holder, 7000, 3000);
     }
 
     function testFork_liveVoteDelegateExtensionHasCode() public view {

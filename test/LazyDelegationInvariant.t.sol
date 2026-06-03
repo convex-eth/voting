@@ -21,7 +21,7 @@ contract VotingActor {
     }
 
     function daoVote(DaoVotePlatform dao, address account, uint256 yesWeight, uint256 noWeight) external {
-        dao.vote(account, yesWeight, noWeight);
+        dao.vote(dao.proposalCount() - 1, account, yesWeight, noWeight);
     }
 
     function gaugeVote(GaugeVotePlatform platform, address account, address[] memory gauges, uint256[] memory weights)

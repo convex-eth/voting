@@ -18,7 +18,7 @@ contract LazyDelegationForkTest is ForkSetup {
         (,, DaoVotePlatform platform) = deployDaoPlatform();
 
         uint256 pid = createDaoProposal(platform, 1 days, 300_001);
-        voteDaoAsHolder(platform, holder, 8000, 2000);
+        voteDaoAsHolder(platform, pid, holder, 8000, 2000);
 
         assertEq(platform.voteTotals(pid), holderWeight);
         assertEq(platform.getYes(pid), holderWeight * 8000 / WEIGHT_BPS);

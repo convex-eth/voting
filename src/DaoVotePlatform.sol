@@ -75,7 +75,7 @@ contract DaoVotePlatform is Ownable2Step {
     mapping(uint256 => VoteTotals) internal _voteTotals;
     mapping(uint256 => mapping(address => int96)) public pendingWeightAdjustment;
 
-    event VoteCast(uint256 indexed proposalId, address indexed user, uint256 yesWeight, uint256 noWeight);
+    event VoteCast(uint256 indexed _proposalId, address indexed user, uint256 yesWeight, uint256 noWeight);
     event NewProposal(uint256 indexed id, uint256 start, uint256 end, VoteType voteType);
     event ForceEndProposal(uint256 indexed id);
     event UserWeightChange(uint256 indexed pid, address indexed user, uint256 baseWeight, int256 adjustedWeight);
@@ -261,21 +261,24 @@ contract DaoVotePlatform is Ownable2Step {
         }
     }
 
-    /// @notice Casts or updates a vote for an account
-    function _vote(address _account, uint256 _yesWeight, uint256 _noWeight) internal {
-        uint256 proposalId = proposals.length - 1;
-        Proposal storage prop = proposals[proposalId];
+    /// @notice Casts or updates a vote for an account on a specific proposal
+    /// @param _proposalId Proposal identifier
+    /// @param _account Account to vote for
+    /// @param _yesWeight Yes weight allocation (0-10000)
+    /// @param _noWeight No weight allocation (0-10000)
+    function _vote(uint256 _proposalId, address _account, uint256 _yesWeight, uint256 _noWeight) internal {
+        Proposal storage prop = proposals[_proposalId];
         if (block.timestamp < prop.startTime) revert NotStarted();
         if (block.timestamp > prop.endTime) revert Ended();
         if (_yesWeight + _noWeight != max_weight) revert MaxWeight();
 
-        _initBaseInfo(_account, proposalId);
+        _initBaseInfo(_account, _proposalId);
 
-        UserInfo storage user = userInfo[proposalId][_account];
+        UserInfo storage user = userInfo[_proposalId][_account];
 
         if (user.voteStatus > 0) {
             int256 oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
-            _changeVoteTotals(proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
+            _changeVoteTotals(_proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
 
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
             uint256 userBaseDiff = currentBalance - user.baseWeight;
@@ -293,15 +296,15 @@ contract DaoVotePlatform is Ownable2Step {
                 (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);
                 int256 realDiff = int256(currentDelWeight) - int256(preSyncWeight);
                 if (realDiff > 0) {
-                    UserInfo storage del = userInfo[proposalId][user.delegate];
+                    UserInfo storage del = userInfo[_proposalId][user.delegate];
                     if (del.voteStatus > 0) {
                         if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
-                            _changeVoteTotals(proposalId, -realDiff, del.yesWeight, del.noWeight);
+                            _changeVoteTotals(_proposalId, -realDiff, del.yesWeight, del.noWeight);
                             del.adjustedWeight -= int96(realDiff);
                             if (del.adjustedWeight < 0) revert DelegateOverSubtracted();
                         } else {
-                            pendingWeightAdjustment[proposalId][user.delegate] -= int96(realDiff);
-                            emit PendingWeightAdjustment(proposalId, user.delegate, -realDiff);
+                            pendingWeightAdjustment[_proposalId][user.delegate] -= int96(realDiff);
+                            emit PendingWeightAdjustment(_proposalId, user.delegate, -realDiff);
                         }
                     } else {
                         del.adjustedWeight -= int96(realDiff);
@@ -309,13 +312,13 @@ contract DaoVotePlatform is Ownable2Step {
                 }
             }
 
-            int96 pend = pendingWeightAdjustment[proposalId][_account];
+            int96 pend = pendingWeightAdjustment[_proposalId][_account];
             if (pend != 0) {
-                pendingWeightAdjustment[proposalId][_account] = 0;
+                pendingWeightAdjustment[_proposalId][_account] = 0;
                 user.adjustedWeight += pend;
             }
 
-            emit UserWeightChange(proposalId, _account, user.baseWeight, user.adjustedWeight);
+            emit UserWeightChange(_proposalId, _account, user.baseWeight, user.adjustedWeight);
         }
 
         int256 userWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
@@ -323,15 +326,15 @@ contract DaoVotePlatform is Ownable2Step {
 
         user.yesWeight = uint16(_yesWeight);
         user.noWeight = uint16(_noWeight);
-        _changeVoteTotals(proposalId, userWeight, _yesWeight, _noWeight);
+        _changeVoteTotals(_proposalId, userWeight, _yesWeight, _noWeight);
 
-        emit VoteCast(proposalId, _account, _yesWeight, _noWeight);
+        emit VoteCast(_proposalId, _account, _yesWeight, _noWeight);
 
         user.lastVoteTime = uint48(block.timestamp);
 
         if (user.voteStatus == 0) {
             user.voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);
-            votedUsers[proposalId].push(_account);
+            votedUsers[_proposalId].push(_account);
         }
     }
 
@@ -339,15 +342,15 @@ contract DaoVotePlatform is Ownable2Step {
     /// @param _account Account to vote for
     /// @param _yesWeight Yes weight allocation (0-10000)
     /// @param _noWeight No weight allocation (0-10000)
-    function vote(address _account, uint256 _yesWeight, uint256 _noWeight) external onlyAcceptedSigner(_account) {
-        uint256 proposalId = proposals.length - 1;
-        uint8 vs = userInfo[proposalId][_account].voteStatus;
+    function vote(uint256 _proposalId, address _account, uint256 _yesWeight, uint256 _noWeight) external onlyAcceptedSigner(_account) {
+
+        uint8 vs = userInfo[_proposalId][_account].voteStatus;
         if (msg.sender != _account && vs >= uint8(VoteStatus.Voted)) revert NotVoteAuth();
 
-        _vote(_account, _yesWeight, _noWeight);
+        _vote(_proposalId, _account, _yesWeight, _noWeight);
 
         if (msg.sender == _account && vs == uint8(VoteStatus.VotedViaSurrogate)) {
-            userInfo[proposalId][_account].voteStatus = uint8(VoteStatus.Voted);
+            userInfo[_proposalId][_account].voteStatus = uint8(VoteStatus.Voted);
         }
     }
 
@@ -378,6 +381,7 @@ contract DaoVotePlatform is Ownable2Step {
     /// @notice Forces the current proposal to end immediately
     function forceEndProposal() public onlyOperator {
         uint256 proposalId = proposals.length - 1;
+
         if (proposals[proposalId].startTime == 0) revert NotStarted();
         if (block.timestamp > proposals[proposalId].endTime + finalizationTime) revert Ended();
 
