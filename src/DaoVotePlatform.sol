@@ -378,17 +378,16 @@ contract DaoVotePlatform is Ownable2Step {
         emit NewProposal(proposals.length - 1, _startTime, _endTime, _voteType);
     }
 
-    /// @notice Forces the current proposal to end immediately
-    function forceEndProposal() public onlyOperator {
-        uint256 proposalId = proposals.length - 1;
+    /// @notice Forces a specific proposal to end immediately
+    /// @param _proposalId Proposal identifier
+    function forceEndProposal(uint256 _proposalId) public onlyOperator {
+        if (proposals[_proposalId].startTime == 0) revert NotStarted();
+        if (block.timestamp > proposals[_proposalId].endTime + finalizationTime) revert Ended();
 
-        if (proposals[proposalId].startTime == 0) revert NotStarted();
-        if (block.timestamp > proposals[proposalId].endTime + finalizationTime) revert Ended();
-
-        proposals[proposalId].startTime = 0;
-        proposals[proposalId].endTime = 0;
-        proposals[proposalId].epoch = 0;
-        emit ForceEndProposal(proposalId);
+        proposals[_proposalId].startTime = 0;
+        proposals[_proposalId].endTime = 0;
+        proposals[_proposalId].epoch = 0;
+        emit ForceEndProposal(_proposalId);
     }
 
     /// @notice Sets an operator address

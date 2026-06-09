@@ -148,7 +148,7 @@ contract DaoVotePlatformTest is Test {
     function test_forceEndProposal() public {
         uint256 pid = _createProposal();
         vm.prank(operator);
-        dao.forceEndProposal();
+        dao.forceEndProposal(currentPid);
 
         (uint256 s, uint256 e, uint256 ep,,) = dao.proposals(pid);
         assertEq(s, 0);
@@ -166,7 +166,7 @@ contract DaoVotePlatformTest is Test {
         vm.warp(endTime + 6 hours);
 
         vm.prank(operator);
-        dao.forceEndProposal();
+        dao.forceEndProposal(currentPid);
     }
 
     function test_cannotForceEndAfterFinalized() public {
@@ -175,7 +175,7 @@ contract DaoVotePlatformTest is Test {
 
         vm.prank(operator);
         vm.expectRevert(DaoVotePlatform.Ended.selector);
-        dao.forceEndProposal();
+        dao.forceEndProposal(currentPid);
     }
 
     function test_isFinalized() public {
@@ -216,7 +216,7 @@ contract DaoVotePlatformTest is Test {
     function test_isFinalized_forceEnded() public {
         uint256 pid = _createProposal();
         vm.prank(operator);
-        dao.forceEndProposal();
+        dao.forceEndProposal(currentPid);
 
         assertFalse(dao.isFinalized(pid));
     }
@@ -534,7 +534,7 @@ contract DaoVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         vm.prank(operator);
-        dao.forceEndProposal();
+        dao.forceEndProposal(currentPid);
 
         vm.prank(alice);
         vm.expectRevert(DaoVotePlatform.Ended.selector);
