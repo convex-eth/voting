@@ -190,15 +190,15 @@ contract DelegateNegativeWeightTest is Test {
                 uint256 userW = delegation.userWeightAtEpochOf(e, user);
                 uint256 delBal = delegation.balanceAtEpochOf(e, user);
                 address delAt = delegation.getDelegateAtEpoch(user, e);
-                (uint256 snapPre, uint256 snapTs) = delegation.getSyncSnapshot(user, e);
-                if (userW > 0 || delBal > 0 || snapTs > 0 || delAt != address(0)) {
+                (uint256 snapPre, uint256 snapNonce) = delegation.getSyncSnapshot(user, e);
+                if (userW > 0 || delBal > 0 || snapNonce > 0 || delAt != address(0)) {
                     emit log_named_uint("    epoch", e);
                     emit log_named_uint("      userWeight (packed*WD)", userW);
                     emit log_named_uint("      balanceAtEpochOf (del total)", delBal);
                     emit log_named_address("      delegate", delAt);
-                    if (snapTs > 0) {
+                    if (snapNonce > 0) {
                         emit log_named_uint("      snapshot.preSyncWeight", snapPre);
-                        emit log_named_uint("      snapshot.timestamp", snapTs);
+                        emit log_named_uint("      snapshot.syncNonce", snapNonce);
                     } else {
                         emit log_string("      snapshot: none");
                     }
@@ -228,7 +228,7 @@ contract DelegateNegativeWeightTest is Test {
 
             (uint96 uiBase, int96 uiAdj, uint48 uiLastVote, uint16 uiYes, uint16 uiNo,
              uint8 uiStatus, address uiDelegate, uint96 uiTotalDel) = dao.userInfo(daoPid, voter);
-            emit log_named_uint("      lastVoteTime", uiLastVote);
+            emit log_named_uint("      lastVoteSyncNonce", uiLastVote);
             emit log_named_uint("      voteStatus", uiStatus);
             emit log_named_address("      delegate", uiDelegate);
             emit log_named_uint("      totalDelegationWeight", uiTotalDel);

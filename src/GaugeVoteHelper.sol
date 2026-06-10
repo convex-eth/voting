@@ -32,7 +32,7 @@ contract GaugeVoteHelper {
         uint256[] memory weights = new uint256[](len);
 
         (,, uint48 propEpoch) = _gaugePlatform.proposals(_proposalId);
-        (,, uint48 delLastVoteTime, uint8 delVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, _delegate);
+        (,, uint48 delLastVoteSyncNonce, uint8 delVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, _delegate);
 
         for (uint256 i; i < len;) {
             address user = _users[i];
@@ -44,15 +44,15 @@ contract GaugeVoteHelper {
             }
 
             uint256 packedWeight = delegation.userWeightAtEpochOf(uint256(propEpoch), user);
-            (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(user, uint256(propEpoch));
-            (,, uint48 userLastVoteTime, uint8 userVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, user);
+            (uint256 preSyncWeight, uint256 snapNonce) = delegation.getSyncSnapshot(user, uint256(propEpoch));
+            (,, uint48 userLastVoteSyncNonce, uint8 userVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, user);
 
             if (userVoteStatus > 0) {
-                if (snapTs > 0 && snapTs > uint256(userLastVoteTime)) {
+                if (snapNonce > 0 && snapNonce > uint256(userLastVoteSyncNonce)) {
                     weights[i] = packedWeight - preSyncWeight;
                 }
             } else {
-                if (delVoteStatus == 0 || snapTs == 0 || snapTs <= uint256(delLastVoteTime)) {
+                if (delVoteStatus == 0 || snapNonce == 0 || snapNonce <= uint256(delLastVoteSyncNonce)) {
                     weights[i] = packedWeight;
                 } else {
                     weights[i] = preSyncWeight;

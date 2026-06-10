@@ -31,8 +31,9 @@ contract Delegation is Ownable2Step {
     }
 
     struct SyncSnapshot {
-        uint96 timestamp;
+        uint96 syncNonce;
         uint32 preSyncWeight;
+        uint96 timestamp;
     }
 
     error NoDelegate();
@@ -42,6 +43,8 @@ contract Delegation is Ownable2Step {
     error ArrayLengthMismatch();
 
     bool public initializationComplete;
+
+    uint256 public syncNonce;
 
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
@@ -178,6 +181,7 @@ contract Delegation is Ownable2Step {
         if (postPacked != prePacked) {
             syncSnapshots[_user][currentEpoch] = SyncSnapshot({
                 preSyncWeight: uint32(prePacked),
+                syncNonce: uint96(++syncNonce),
                 timestamp: uint96(block.timestamp)
             });
         }
@@ -231,6 +235,7 @@ contract Delegation is Ownable2Step {
 
         syncSnapshots[_user][_epoch] = SyncSnapshot({
             preSyncWeight: uint32(prePacked),
+            syncNonce: uint96(++syncNonce),
             timestamp: uint96(block.timestamp)
         });
 
@@ -441,10 +446,10 @@ contract Delegation is Ownable2Step {
     /// @param _user User address
     /// @param _epoch Epoch to query
     /// @return preSyncWeight Weight before sync
-    /// @return timestamp Snapshot timestamp
-    function getSyncSnapshot(address _user, uint256 _epoch) external view returns (uint256 preSyncWeight, uint256 timestamp) {
+    /// @return snapshotNonce Monotonic nonce at time of snapshot
+    function getSyncSnapshot(address _user, uint256 _epoch) external view returns (uint256 preSyncWeight, uint256 snapshotNonce) {
         SyncSnapshot memory snap = syncSnapshots[_user][_epoch];
-        return (uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.timestamp));
+        return (uint256(snap.preSyncWeight) * WEIGHT_DIVISOR, uint256(snap.syncNonce));
     }
 
     /// @notice Reads a packed weight from an epoch weighting entry

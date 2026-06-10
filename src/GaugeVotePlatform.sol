@@ -41,7 +41,7 @@ contract GaugeVotePlatform is Ownable2Step {
     struct UserInfo {
         uint96 baseWeight;
         int96 adjustedWeight;
-        uint48 lastVoteTime;
+        uint48 lastVoteSyncNonce;
         uint8 voteStatus;
         address delegate;
         uint96 totalDelegationWeight;
@@ -200,12 +200,12 @@ contract GaugeVotePlatform is Ownable2Step {
                 del.adjustedWeight -= int96(int256(delegation.userWeightAtEpochOf(epoch, _account)));
             } else {
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(epoch, _account);
-                (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, epoch);
+                (uint256 snapWeight, uint256 snapNonce) = delegation.getSyncSnapshot(_account, epoch);
                 int256 weightToRemove;
 
-                if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
+                if (snapNonce > 0 && snapNonce <= uint256(del.lastVoteSyncNonce)) {
                     weightToRemove = int256(currentDelWeight);
-                } else if (snapTs > 0) {
+                } else if (snapNonce > 0) {
                     weightToRemove = int256(snapWeight);
                     int256 diff = int256(currentDelWeight) - int256(snapWeight);
                     if (diff > 0) {
@@ -272,12 +272,12 @@ contract GaugeVotePlatform is Ownable2Step {
                 delegation.syncAtEpoch(_account, prop.epoch);
                 
                 uint256 currentDelWeight = delegation.userWeightAtEpochOf(prop.epoch, _account);
-                (uint256 preSyncWeight, uint256 snapTs) = delegation.getSyncSnapshot(_account, prop.epoch);
+                (uint256 preSyncWeight, uint256 snapNonce) = delegation.getSyncSnapshot(_account, prop.epoch);
                 int256 realDiff = int256(currentDelWeight) - int256(preSyncWeight);
                 if (realDiff > 0) {
                     UserInfo storage del = userInfo[proposalId][user.delegate];
                     if (del.voteStatus > 0) {
-                        if (snapTs > 0 && uint256(del.lastVoteTime) > snapTs) {
+                        if (snapNonce > 0 && snapNonce <= uint256(del.lastVoteSyncNonce)) {
                             GaugeVote[] storage delegateVotes = votes[proposalId][user.delegate];
                             uint256 len = delegateVotes.length;
                             for (uint256 i = 0; i < len;) {
@@ -327,7 +327,7 @@ contract GaugeVotePlatform is Ownable2Step {
         emit GaugeWeightsUpdated(proposalId, _account);
         emit VoteCast(proposalId, _account, _gauges, _weights);
 
-        user.lastVoteTime = uint48(block.timestamp);
+        user.lastVoteSyncNonce = uint48(delegation.syncNonce());
 
         if (user.voteStatus == 0) {
             user.voteStatus = msg.sender == _account ? uint8(VoteStatus.Voted) : uint8(VoteStatus.VotedViaSurrogate);

@@ -877,12 +877,11 @@ contract DelegationTest is Test {
 
         uint256 preWeight = delegation.userWeightAtEpochOf(_currentEpochIdx(), alice);
 
-        uint256 ts = block.timestamp;
         delegation.sync(alice);
 
-        (uint256 snapWeight, uint256 snapTs) = delegation.getSyncSnapshot(alice, _currentEpochIdx());
+        (uint256 snapWeight, uint256 snapNonce) = delegation.getSyncSnapshot(alice, _currentEpochIdx());
         assertEq(snapWeight, preWeight);
-        assertEq(snapTs, ts);
+        assertGt(snapNonce, 0);
     }
 
     function test_syncSnapshotCapturesPreSyncWeight() public {
@@ -945,13 +944,11 @@ contract DelegationTest is Test {
         _warpWeeks(17);
         _relock(alice, 2000 * WD);
 
-        uint256 ts2 = block.timestamp;
         delegation.sync(alice);
 
         uint256 epoch2 = _currentEpochIdx();
         (, uint256 st2) = delegation.getSyncSnapshot(alice, epoch2);
         assertGt(st2, st1);
-        assertEq(st2, ts2);
 
         _assertWeightMatchesVlCVX(epoch2, alice);
         _assertDelegateMatchesVlCVX(epoch2, alice, delegateA);
