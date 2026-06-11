@@ -215,8 +215,16 @@ contract Delegation is Ownable2Step {
             prePacked := mload(add(userEntry, mul(offset, 32)))
         }
 
+        if (syncSnapshots[_user][_epoch].syncNonce != 0) return;
+
         uint256 newWeight = vlCVX.balanceAtEpochOf(_epoch, _user);
         uint256 newPacked = newWeight / WEIGHT_DIVISOR;
+
+        syncSnapshots[_user][_epoch] = SyncSnapshot({
+            preSyncWeight: uint32(prePacked),
+            syncNonce: uint96(++syncNonce),
+            timestamp: uint96(block.timestamp)
+        });
 
         if (newPacked == prePacked) return;
 
@@ -233,12 +241,6 @@ contract Delegation is Ownable2Step {
 
         userEpochWeights[_user][entryIdx] = userEntry;
         delegateEpochWeights[delegate][entryIdx] = delegateEntry;
-
-        syncSnapshots[_user][_epoch] = SyncSnapshot({
-            preSyncWeight: uint32(prePacked),
-            syncNonce: uint96(++syncNonce),
-            timestamp: uint96(block.timestamp)
-        });
 
         emit Synced(_user, delegate);
     }
