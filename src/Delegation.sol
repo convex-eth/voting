@@ -77,6 +77,7 @@ contract Delegation is Ownable2Step {
             address user = _users[i];
             address delegate = _delegates[i];
             if (delegate == address(0)) revert NoDelegate();
+            if (delegate == user) revert SelfDelegation();
 
             SetDelegateRecord[] storage history = delegateHistory[user];
             if (history.length != 0) {
