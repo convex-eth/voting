@@ -77,7 +77,7 @@ contract FxGaugeExecutor {
 
         uint256 count;
         uint256 weightSum;
-        uint256 lastNonZero;
+        int256 lastNonZero = -1;
 
         for (uint256 i = 0; i < len; ) {
             uint256 gt = votePlatform.gaugeTotal(proposalId, gauges[i]);
@@ -86,7 +86,7 @@ contract FxGaugeExecutor {
                 count++;
                 if (weights[i] > 0) {
                     weightSum += weights[i];
-                    lastNonZero = i;
+                    lastNonZero = int256(i);
                 }
             }
             unchecked { ++i; }
@@ -97,8 +97,8 @@ contract FxGaugeExecutor {
         uint256 newCount = state.gaugeCount + count;
         uint256 newWeight = state.weight + weightSum;
 
-        if (count > 0 && newCount >= totalGaugeCount && newWeight < WEIGHT_BPS) {
-            weights[lastNonZero] += WEIGHT_BPS - newWeight;
+        if (lastNonZero >= 0 && count > 0 && newCount >= totalGaugeCount && newWeight < WEIGHT_BPS) {
+            weights[uint256(lastNonZero)] += WEIGHT_BPS - newWeight;
             newWeight = WEIGHT_BPS;
         }
 
