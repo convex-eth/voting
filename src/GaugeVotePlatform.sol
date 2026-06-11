@@ -338,6 +338,7 @@ contract GaugeVotePlatform is Ownable2Step {
 
     /// @notice Updates or inserts the total weight for a gauge
     function _changeGaugeTotal(uint256 _proposalId, address _gauge, int256 _changeValue) internal {
+        if (_changeValue == 0) return;
         uint256 idx = _gaugeIndex[_proposalId][_gauge];
         uint256 absVal;
         unchecked {
