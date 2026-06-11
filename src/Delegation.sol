@@ -273,7 +273,7 @@ contract Delegation is Ownable2Step {
         uint256[17] memory epochWeights;
 
         if (_locked > 0) {
-            for (uint256 i = nextUnlockIndex; i < nextUnlockIndex + 16;) {
+            for (uint256 i = nextUnlockIndex; i < nextUnlockIndex + 17;) {
                 uint112 lockBoosted;
                 uint32 unlockTime;
                 try vlCVX.userLocks(_user, i) returns (uint112 _amount, uint112 _boosted, uint32 _unlockTime) {
