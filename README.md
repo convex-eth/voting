@@ -229,7 +229,7 @@ Permissionless. Anyone can call `setGauge(gauge)`. The registry checks on-chain 
 
 ### FxGaugeRegistry
 
-Owned by ConvexCore. The owner calls `setGauge(gauge)` to add or remove gauges. Validity is determined by the F(x) gauge controller's type check (must be `LIQUIDITY_POOL` or `REBALANCE_POOL`) and the gauge's `isActive()` status.
+Permissionless add — anyone can call `setGauge(gauge)` to register valid F(x) gauges. Validity is determined by the F(x) gauge controller's type check (must be `LIQUIDITY_POOL` or `REBALANCE_POOL`) and the gauge's `isActive()` status. If the gauge becomes invalid, calling `setGauge` again removes it. The owner retains `forceRemove`/`reinstate` veto power.
 
 ## Proposers
 
@@ -307,7 +307,7 @@ src/
   GaugeVotePlatform.sol       # Gauge voting (Curve, F(x))
   DaoVotePlatform.sol         # Yes/No DAO voting (all platforms)
   CurveGaugeRegistry.sol      # Permissionless Curve gauge list
-  FxGaugeRegistry.sol         # Owned F(x) gauge list
+  FxGaugeRegistry.sol         # Permissionless F(x) gauge list (owner can force-remove)
   CurveVoteExecutor.sol       # DAO vote executor for Curve
   CurveGaugeExecutor.sol      # Gauge vote executor for Curve
   FxGaugeExecutor.sol         # Gauge vote executor for F(x)
