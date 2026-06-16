@@ -180,7 +180,7 @@ contract DaoVotePlatform is Ownable2Step {
     }
 
     /// @notice Updates vote totals with a delta and yes/no distribution
-    function _changeVoteTotals(uint256 _proposalId, int256 _delta, uint256 _yesWeight, uint256 _noWeight) internal {
+    function _changeVoteTotals(uint256 _proposalId, int256 _delta, uint256 _yesWeight) internal {
         VoteTotals storage totals = _voteTotals[_proposalId];
         int256 yesDelta = _delta * int256(_yesWeight) / int256(max_weight);
         int256 noDelta = _delta - yesDelta;
@@ -252,7 +252,7 @@ contract DaoVotePlatform is Ownable2Step {
                     weightToRemove = int256(currentDelWeight);
                 }
 
-                _changeVoteTotals(_proposalId, -weightToRemove, del.yesWeight, del.noWeight);
+                _changeVoteTotals(_proposalId, -weightToRemove, del.yesWeight);
                 del.adjustedWeight -= int96(weightToRemove);
                 if (del.adjustedWeight < 0) revert DelegateOverSubtracted();
             }
@@ -278,7 +278,7 @@ contract DaoVotePlatform is Ownable2Step {
 
         if (user.voteStatus > 0) {
             int256 oldUserWeight = int256(uint256(user.baseWeight)) + int256(user.adjustedWeight);
-            _changeVoteTotals(_proposalId, -oldUserWeight, user.yesWeight, user.noWeight);
+            _changeVoteTotals(_proposalId, -oldUserWeight, user.yesWeight);
 
             uint256 currentBalance = vlCVX.balanceAtEpochOf(prop.epoch, _account);
             uint256 userBaseDiff = currentBalance - user.baseWeight;
@@ -299,7 +299,7 @@ contract DaoVotePlatform is Ownable2Step {
                     UserInfo storage del = userInfo[_proposalId][user.delegate];
                     if (del.voteStatus > 0) {
                         if (snapNonce > 0 && snapNonce <= uint256(del.lastVoteSyncNonce)) {
-                            _changeVoteTotals(_proposalId, -realDiff, del.yesWeight, del.noWeight);
+                            _changeVoteTotals(_proposalId, -realDiff, del.yesWeight);
                             del.adjustedWeight -= int96(realDiff);
                             if (del.adjustedWeight < 0) revert DelegateOverSubtracted();
                         } else {
@@ -326,7 +326,7 @@ contract DaoVotePlatform is Ownable2Step {
 
         user.yesWeight = uint16(_yesWeight);
         user.noWeight = uint16(_noWeight);
-        _changeVoteTotals(_proposalId, userWeight, _yesWeight, _noWeight);
+        _changeVoteTotals(_proposalId, userWeight, _yesWeight);
 
         emit VoteCast(_proposalId, _account, _yesWeight, _noWeight);
 
