@@ -110,6 +110,36 @@ contract DaoVotePlatformTest is Test {
         assertEq(pId, 42);
     }
 
+    function test_createProposalUsesEpochContainingStartTime() public {
+        _warpToNextEpoch();
+        uint256 currentEpochStart = vm.getBlockTimestamp() / WEEK * WEEK;
+        uint256 startTime = currentEpochStart - 1 hours;
+        uint256 endTime = startTime + 2 days;
+
+        vm.prank(operator);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 42);
+
+        (,, uint48 storedEpoch,,) = dao.proposals(0);
+        (, uint32 storedEpochStart) = vlcvxImpl.epochs(storedEpoch);
+        (, uint32 nextEpochStart) = vlcvxImpl.epochs(uint256(storedEpoch) + 1);
+
+        assertLe(uint256(storedEpochStart), startTime);
+        assertGt(uint256(nextEpochStart), startTime);
+        assertEq(uint256(storedEpoch), vlcvxImpl.epochCount() - 3);
+    }
+
+    function test_createProposalUsesCurrentEpochWhenStartTimeInCurrentEpoch() public {
+        _warpToNextEpoch();
+        uint256 startTime = vm.getBlockTimestamp() + 1 days;
+        uint256 endTime = startTime + 2 days;
+
+        vm.prank(operator);
+        dao.createProposal(startTime, endTime, DaoVotePlatform.VoteType.Parameter, 42);
+
+        (,, uint48 storedEpoch,,) = dao.proposals(0);
+        assertEq(uint256(storedEpoch), vlcvxImpl.epochCount() - 2);
+    }
+
     function test_createProposalParameterType() public {
         uint256 startTime = vm.getBlockTimestamp() + 1 days;
         uint256 endTime = startTime + 4 days;

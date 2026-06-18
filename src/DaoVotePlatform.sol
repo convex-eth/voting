@@ -367,6 +367,11 @@ contract DaoVotePlatform is Ownable2Step {
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;
+        (, uint32 epochStart) = vlCVX.epochs(epoch);
+        while (epoch > 0 && uint256(epochStart) > _startTime) {
+            unchecked { --epoch; }
+            (, epochStart) = vlCVX.epochs(epoch);
+        }
 
         proposals.push(Proposal({
             startTime: uint48(_startTime),
