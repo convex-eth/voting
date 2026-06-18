@@ -76,6 +76,11 @@ contract GaugeVoteHelperTest is Test {
         vlcvx.lock(user, amount * WD, 0);
     }
 
+    function _relock(address user, uint256 amount) internal {
+        vm.prank(user);
+        simpleVlCvx(address(vlcvx)).relock(user, amount * WD, 0);
+    }
+
     function _lockAndDelegate(address user, uint256 amount, address del) internal {
         _lock(user, amount);
         if (del != address(0)) {
@@ -87,6 +92,13 @@ contract GaugeVoteHelperTest is Test {
     function _nextEpoch() internal {
         uint256 currentEpoch = (vm.getBlockTimestamp() / WEEK) * WEEK;
         vm.warp(currentEpoch + WEEK + 1);
+    }
+
+    function _advanceEpochs(uint256 count) internal {
+        for (uint256 i; i < count;) {
+            _nextEpoch();
+            unchecked { ++i; }
+        }
     }
 
     function _createProposal() internal returns (uint256) {
@@ -165,6 +177,28 @@ contract GaugeVoteHelperTest is Test {
         delegation.sync(alice);
 
         assertEq(_query(alice, pid), 0);
+    }
+
+    function test_D2_userVotesSyncsThenDelegateVotesUsesOnlySyncedDelta() public {
+        _lock(alice, 1000);
+        _nextEpoch();
+        _lock(alice, 500);
+        vm.prank(alice);
+        delegation.setDelegate(delegate1);
+        _lock(delegate1, 2000);
+        _advanceEpochs(16);
+
+        uint256 pid = _createProposal();
+        _vote(alice, singleGauge, fullWeight);
+
+        _relock(alice, 1000);
+        delegation.sync(alice);
+
+        assertEq(_query(alice, pid), 0, "delegate has not voted after sync");
+
+        _vote(delegate1, singleGauge, fullWeight);
+
+        assertEq(_query(alice, pid), 1000 * WD);
     }
 
     // === Pattern E: user does NOT vote - no relock ===

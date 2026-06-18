@@ -48,7 +48,13 @@ contract GaugeVoteHelper {
             (,, uint48 userLastVoteSyncNonce, uint8 userVoteStatus,,) = _gaugePlatform.userInfo(_proposalId, user);
 
             if (userVoteStatus > 0) {
-                // User voted directly — their weight was already removed from the delegate's totals
+                if (
+                    snapNonce > uint256(userLastVoteSyncNonce)
+                        && snapNonce <= uint256(delLastVoteSyncNonce)
+                        && packedWeight > preSyncWeight
+                ) {
+                    weights[i] = packedWeight - preSyncWeight;
+                }
             } else {
                 if (delVoteStatus == 0 || snapNonce == 0 || snapNonce <= uint256(delLastVoteSyncNonce)) {
                     weights[i] = packedWeight;
