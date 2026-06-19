@@ -59,8 +59,8 @@ contract ResupplyDaoProposer is Ownable2Step {
         require(!processed, "Resupply vote already processed");
         require(block.timestamp <= createdAt + 3 days, "ProposeVote window expired");
 
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + proposalLength;
+        uint256 startTime = createdAt;
+        uint256 endTime = block.timestamp + proposalLength;
 
         daoVotePlatform.createProposal(
             startTime,

@@ -362,8 +362,10 @@ contract DaoVotePlatform is Ownable2Step {
     function createProposal(uint256 _startTime, uint256 _endTime, VoteType _voteType, uint256 _proposalId) public onlyOperator {
         if (_endTime <= _startTime) revert BadTime();
         if (_endTime <= block.timestamp) revert BadTime();
-        if (_endTime - _startTime < MIN_PROPOSAL_DURATION) revert BadTime();
-        if (_endTime - _startTime > MAX_PROPOSAL_DURATION) revert BadTime();
+        uint256 votingStart = _startTime > block.timestamp ? _startTime : block.timestamp;
+        uint256 votingDuration = _endTime - votingStart;
+        if (votingDuration < MIN_PROPOSAL_DURATION) revert BadTime();
+        if (votingDuration > MAX_PROPOSAL_DURATION) revert BadTime();
 
         vlCVX.checkpointEpoch();
         uint256 epoch = vlCVX.epochCount() - 2;

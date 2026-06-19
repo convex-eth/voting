@@ -70,8 +70,8 @@ contract CurveDaoProposer is Ownable2Step {
         require(open, "Curve vote not open");
         require(block.timestamp <= uint256(startDate) + 3 days, "ProposeVote window expired");
 
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + proposalLength;
+        uint256 startTime = uint256(startDate);
+        uint256 endTime = block.timestamp + proposalLength;
 
         daoVotePlatform.createProposal(
             startTime,

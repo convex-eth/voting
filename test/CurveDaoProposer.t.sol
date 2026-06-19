@@ -106,7 +106,7 @@ contract CurveDaoProposerTest is Test {
     }
 
     function test_proposeOwnershipVote() public {
-        uint64 startDate = uint64(vm.getBlockTimestamp());
+        uint64 startDate = uint64(vm.getBlockTimestamp() - 1 days);
         bytes memory mockGetVote = abi.encodeWithSelector(ICurveVoting.getVote.selector, 1);
         bytes memory mockGetVoteReturn = abi.encode(true, false, startDate, uint64(0), uint64(0), uint64(0), uint256(0), uint256(0), uint256(0), "");
         vm.mockCall(CURVE_OWNERSHIP, mockGetVote, mockGetVoteReturn);
@@ -116,7 +116,7 @@ contract CurveDaoProposerTest is Test {
         proposer.proposeVote(1, true);
 
         (uint256 s, uint256 e,, uint8 vt, uint256 pId) = daoVotePlatform.proposals(pid);
-        assertEq(s, vm.getBlockTimestamp());
+        assertEq(s, uint256(startDate));
         assertEq(e, vm.getBlockTimestamp() + 3 days);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
         assertEq(pId, 1);
@@ -178,7 +178,7 @@ contract CurveDaoProposerTest is Test {
         proposer.proposeVote(4, true);
 
         (uint256 s,,, uint8 vt,) = daoVotePlatform.proposals(pid);
-        assertEq(s, vm.getBlockTimestamp());
+        assertEq(s, uint256(startDate));
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
     }
 

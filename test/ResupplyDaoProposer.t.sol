@@ -90,7 +90,7 @@ contract ResupplyDaoProposerTest is Test {
     }
 
     function test_proposeVote() public {
-        uint256 createdAt = vm.getBlockTimestamp();
+        uint256 createdAt = vm.getBlockTimestamp() - 1 days;
         bytes memory mockData = abi.encode("", uint256(0), createdAt, uint256(0), uint256(0), uint256(0), false, false, "");
         vm.mockCall(RESUPPLY_VOTING, abi.encodeWithSelector(IResupplyVoting.getProposalData.selector, 1), mockData);
 
@@ -99,7 +99,7 @@ contract ResupplyDaoProposerTest is Test {
         proposer.proposeVote(1);
 
         (uint256 s, uint256 e,, uint8 vt, uint256 vId) = daoVotePlatform.proposals(pid);
-        assertEq(s, vm.getBlockTimestamp());
+        assertEq(s, createdAt);
         assertEq(e, vm.getBlockTimestamp() + 3 days);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
         assertEq(vId, 1);
@@ -143,7 +143,7 @@ contract ResupplyDaoProposerTest is Test {
         proposer.proposeVote(4);
 
         (uint256 s,,, uint8 vt,) = daoVotePlatform.proposals(pid);
-        assertEq(s, vm.getBlockTimestamp());
+        assertEq(s, createdAt);
         assertEq(vt, uint8(DaoVotePlatform.VoteType.Ownership));
     }
 
@@ -156,7 +156,7 @@ contract ResupplyDaoProposerTest is Test {
 
         uint256 pid = daoVotePlatform.proposalCount() - 1;
         (uint256 s, uint256 e,,,) = daoVotePlatform.proposals(pid);
-        assertEq(s, vm.getBlockTimestamp());
+        assertEq(s, createdAt);
         assertEq(e, vm.getBlockTimestamp() + proposer.proposalLength());
     }
 
