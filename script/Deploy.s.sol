@@ -21,6 +21,7 @@ import "../src/CurveDaoProposer.sol";
 import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
 import "../src/GaugeVoteHelper.sol";
+import "../src/ProposalMetadata.sol";
 
 // ============================================================================
 // Deploy Script for Convex Voting Project
@@ -59,6 +60,7 @@ contract Deploy is Script {
     uint8 constant GAUGE_EXECUTOR = 4;
     uint8 constant DAO_PROPOSER = 5;
     uint8 constant GAUGE_PROPOSER = 6;
+    uint8 constant DAO_METADATA = 7;
 
     ConvexCore core;
 
@@ -348,6 +350,18 @@ contract Deploy is Script {
         core.execute(address(fxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
         console.log("Set ConvexDeployer as operator on FxDaoProposer");
 
+        ProposalMetadata fxProposalMetadata = new ProposalMetadata("Fx Proposal Metadata", address(core));
+        console.log("FxProposalMetadata:", address(fxProposalMetadata));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FX", DAO_METADATA, address(fxProposalMetadata)));
+        console.log("Registered FX -> DAO_METADATA");
+
+        _setOperator(address(fxProposalMetadata), CONVEX_BOT);
+        console.log("Set ConvexBot as operator on FxProposalMetadata");
+
+        _setOperator(address(fxProposalMetadata), CONVEX_DEPLOYER);
+        console.log("Set ConvexDeployer as operator on FxProposalMetadata");
+
         // ── 16. Deploy F(x) GaugeProposer ──
         GaugeProposer fxGaugeProposer = new GaugeProposer("Fx Gauge Proposer", 
             address(core),
@@ -408,6 +422,18 @@ contract Deploy is Script {
         core.execute(address(fraxDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
         console.log("Set ConvexDeployer as operator on FraxDaoProposer");
 
+        ProposalMetadata fraxProposalMetadata = new ProposalMetadata("Frax Proposal Metadata", address(core));
+        console.log("FraxProposalMetadata:", address(fraxProposalMetadata));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "FRAX", DAO_METADATA, address(fraxProposalMetadata)));
+        console.log("Registered FRAX -> DAO_METADATA");
+
+        _setOperator(address(fraxProposalMetadata), CONVEX_BOT);
+        console.log("Set ConvexBot as operator on FraxProposalMetadata");
+
+        _setOperator(address(fraxProposalMetadata), CONVEX_DEPLOYER);
+        console.log("Set ConvexDeployer as operator on FraxProposalMetadata");
+
         // ── 21. Set Proposer as Operator on Frax Platform ──
         core.execute(address(fraxDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(fraxDaoProposer), true));
         console.log("Set FraxDaoProposer as operator on FraxDaoVoting");
@@ -443,6 +469,18 @@ contract Deploy is Script {
 
         core.execute(address(convexDaoProposer), abi.encodeWithSignature("setOperator(address,bool)", CONVEX_DEPLOYER, true));
         console.log("Set ConvexDeployer as operator on ConvexDaoProposer");
+
+        ProposalMetadata convexProposalMetadata = new ProposalMetadata("Convex Proposal Metadata", address(core));
+        console.log("ConvexProposalMetadata:", address(convexProposalMetadata));
+
+        core.execute(address(registry), abi.encodeWithSignature("setVotingContract(string,uint8,address)", "CONVEX", DAO_METADATA, address(convexProposalMetadata)));
+        console.log("Registered CONVEX -> DAO_METADATA");
+
+        _setOperator(address(convexProposalMetadata), CONVEX_BOT);
+        console.log("Set ConvexBot as operator on ConvexProposalMetadata");
+
+        _setOperator(address(convexProposalMetadata), CONVEX_DEPLOYER);
+        console.log("Set ConvexDeployer as operator on ConvexProposalMetadata");
 
         // ── 24. Set Proposer as Operator on Convex Platform ──
         core.execute(address(convexDaoVoting), abi.encodeWithSignature("setOperator(address,bool)", address(convexDaoProposer), true));
@@ -527,12 +565,15 @@ contract Deploy is Script {
         console.log("FxDaoVoting:", address(fxDaoVoting));
         console.log("FxGaugeVoting:", address(fxGaugeVoting));
         console.log("FxDaoProposer:", address(fxDaoProposer));
+        console.log("FxProposalMetadata:", address(fxProposalMetadata));
         console.log("FxGaugeProposer:", address(fxGaugeProposer));
         console.log("FxGaugeExecutor:", address(fxGaugeExecutor));
         console.log("FraxDaoVoting:", address(fraxDaoVoting));
         console.log("FraxDaoProposer:", address(fraxDaoProposer));
+        console.log("FraxProposalMetadata:", address(fraxProposalMetadata));
         console.log("ConvexDaoVoting:", address(convexDaoVoting));
         console.log("ConvexDaoProposer:", address(convexDaoProposer));
+        console.log("ConvexProposalMetadata:", address(convexProposalMetadata));
         console.log("ResupplyDaoVoting:", address(resupplyDaoVoting));
         console.log("ResupplyDaoProposer:", address(resupplyDaoProposer));
         console.log("ResupplyVoteExecutor:", address(resupplyVoteExecutor));
@@ -552,12 +593,15 @@ contract Deploy is Script {
         vm.serializeAddress("deploy", "FxDaoVoting", address(fxDaoVoting));
         vm.serializeAddress("deploy", "FxGaugeVoting", address(fxGaugeVoting));
         vm.serializeAddress("deploy", "FxDaoProposer", address(fxDaoProposer));
+        vm.serializeAddress("deploy", "FxProposalMetadata", address(fxProposalMetadata));
         vm.serializeAddress("deploy", "FxGaugeProposer", address(fxGaugeProposer));
         vm.serializeAddress("deploy", "FxGaugeExecutor", address(fxGaugeExecutor));
         vm.serializeAddress("deploy", "FraxDaoVoting", address(fraxDaoVoting));
         vm.serializeAddress("deploy", "FraxDaoProposer", address(fraxDaoProposer));
+        vm.serializeAddress("deploy", "FraxProposalMetadata", address(fraxProposalMetadata));
         vm.serializeAddress("deploy", "ConvexDaoVoting", address(convexDaoVoting));
         vm.serializeAddress("deploy", "ConvexDaoProposer", address(convexDaoProposer));
+        vm.serializeAddress("deploy", "ConvexProposalMetadata", address(convexProposalMetadata));
         vm.serializeAddress("deploy", "ResupplyDaoVoting", address(resupplyDaoVoting));
         vm.serializeAddress("deploy", "ResupplyDaoProposer", address(resupplyDaoProposer));
         vm.serializeAddress("deploy", "ResupplyVoteExecutor", address(resupplyVoteExecutor));

@@ -68,6 +68,11 @@ contract VotingRegistryTest is Test {
         assertEq(registry.getAddress("NonExistent", registry.VOTE_DAO()), address(0));
     }
 
+    function test_metadataTypeConstants() public view {
+        assertEq(registry.DAO_METADATA(), 7);
+        assertEq(registry.OTHER_TYPE(), 8);
+    }
+
     function test_eventEmitted() public {
         vm.prank(owner);
         vm.expectEmit(true, true, true, false);

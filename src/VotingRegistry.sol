@@ -11,7 +11,8 @@ contract VotingRegistry is Ownable2Step {
     uint8 public constant GAUGE_EXECUTOR = 4;
     uint8 public constant DAO_PROPOSER = 5;
     uint8 public constant GAUGE_PROPOSER = 6;
-    uint8 public constant OTHER_TYPE = 7;
+    uint8 public constant DAO_METADATA = 7;
+    uint8 public constant OTHER_TYPE = 8;
 
     event VotingContractSet(string indexed platform, uint8 indexed voteType, address indexed votingContract);
 
