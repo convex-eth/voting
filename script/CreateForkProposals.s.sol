@@ -8,6 +8,7 @@ import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
 import "../src/CurveDaoProposer.sol";
 import "../src/ResupplyDaoProposer.sol";
+import "../src/ProposalMetadata.sol";
 
 interface IForkGaugeVotePlatform {
     function proposalCount() external view returns (uint256);
@@ -36,6 +37,9 @@ contract CreateForkProposals is Script {
         address fraxDaoProposer;
         address convexDaoProposer;
         address resupplyDaoProposer;
+        address fxProposalMetadata;
+        address fraxProposalMetadata;
+        address convexProposalMetadata;
         address curveDaoVoting;
         address fxDaoVoting;
         address fraxDaoVoting;
@@ -60,6 +64,7 @@ contract CreateForkProposals is Script {
             "FX",
             d.fxDaoProposer,
             d.fxDaoVoting,
+            d.fxProposalMetadata,
             vm.envOr("FX_DAO_VOTE_ID", uint256(1001)),
             uint8(vm.envOr("FX_DAO_VOTE_TYPE", uint256(VOTE_TYPE_PARAMETER)))
         );
@@ -67,6 +72,7 @@ contract CreateForkProposals is Script {
             "FRAX",
             d.fraxDaoProposer,
             d.fraxDaoVoting,
+            d.fraxProposalMetadata,
             vm.envOr("FRAX_DAO_VOTE_ID", uint256(1002)),
             uint8(vm.envOr("FRAX_DAO_VOTE_TYPE", uint256(VOTE_TYPE_PARAMETER)))
         );
@@ -74,6 +80,7 @@ contract CreateForkProposals is Script {
             "CONVEX",
             d.convexDaoProposer,
             d.convexDaoVoting,
+            d.convexProposalMetadata,
             vm.envOr("CONVEX_DAO_VOTE_ID", uint256(1003)),
             uint8(vm.envOr("CONVEX_DAO_VOTE_TYPE", uint256(VOTE_TYPE_PARAMETER)))
         );
@@ -92,6 +99,9 @@ contract CreateForkProposals is Script {
         d.fraxDaoProposer = json.readAddress(".FraxDaoProposer");
         d.convexDaoProposer = json.readAddress(".ConvexDaoProposer");
         d.resupplyDaoProposer = json.readAddress(".ResupplyDaoProposer");
+        d.fxProposalMetadata = json.readAddress(".FxProposalMetadata");
+        d.fraxProposalMetadata = json.readAddress(".FraxProposalMetadata");
+        d.convexProposalMetadata = json.readAddress(".ConvexProposalMetadata");
         d.curveDaoVoting = json.readAddress(".CurveDaoVoting");
         d.fxDaoVoting = json.readAddress(".FxDaoVoting");
         d.fraxDaoVoting = json.readAddress(".FraxDaoVoting");
@@ -156,6 +166,7 @@ contract CreateForkProposals is Script {
         string memory label,
         address proposer,
         address platform,
+        address metadata,
         uint256 voteId,
         uint8 voteType
     ) internal {
@@ -168,6 +179,14 @@ contract CreateForkProposals is Script {
         console.log(voteId);
         console.log("previous");
         console.log(beforeCount);
+
+        string memory proposalIdText = vm.toString(proposalId);
+        ProposalMetadata(metadata).setMetadata(
+            proposalId,
+            string.concat("This is proposal ", proposalIdText),
+            string.concat("https://example.com/proposals/", proposalIdText)
+        );
+        console.log(string.concat(label, " dao metadata set"));
     }
 
     function _createResupplyDaoProposal(address proposer, address platform) internal {
