@@ -15,13 +15,21 @@ contract VotingActor {
     function setSurrogate(SurrogateRegistry registry, address surrogate) external {
         registry.setSurrogate(surrogate);
     }
+
     function setDelegate(Delegation delegation, address delegate) external {
         delegation.setDelegate(delegate);
     }
+
     function daoVote(DaoVotePlatform dao, address account, uint256 yesWeight, uint256 noWeight) external {
         dao.vote(dao.proposalCount() - 1, account, yesWeight, noWeight);
     }
-    function gaugeVote(GaugeVotePlatform platform, address account, address[] calldata gauges, uint256[] calldata weights) external {
+
+    function gaugeVote(
+        GaugeVotePlatform platform,
+        address account,
+        address[] calldata gauges,
+        uint256[] calldata weights
+    ) external {
         platform.vote(account, gauges, weights);
     }
 }
@@ -73,11 +81,18 @@ contract DelegateNegativeWeightTest is Test {
 
         address gaugeController = address(new MockGaugeController());
         vm.etch(CURVE_GAUGE_CONTROLLER, gaugeController.code);
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
 
-        dao = new DaoVotePlatform("Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
-        gaugePlatform = new GaugeVotePlatform("Convex Gauge Voting", 
-            address(this), address(vlcvx), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
+        dao = new DaoVotePlatform(
+            "Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation)
+        );
+        gaugePlatform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
+            address(this),
+            address(vlcvx),
+            address(gaugeRegistry),
+            address(surrogateRegistry),
+            address(delegation)
         );
         dao.setOperator(operator, true);
         gaugePlatform.setOperator(operator, true);
@@ -115,12 +130,15 @@ contract DelegateNegativeWeightTest is Test {
         gauges[0] = address(gauge1);
         gauges[1] = address(gauge2);
         gauges[2] = address(gauge3);
+        MockGaugeController(CURVE_GAUGE_CONTROLLER).setGauge(0, gauges[0]);
+        MockGaugeController(CURVE_GAUGE_CONTROLLER).setGauge(1, gauges[1]);
+        MockGaugeController(CURVE_GAUGE_CONTROLLER).setGauge(2, gauges[2]);
         MockGaugeController(CURVE_GAUGE_CONTROLLER).setGaugeWeight(gauges[0], 1000);
         MockGaugeController(CURVE_GAUGE_CONTROLLER).setGaugeWeight(gauges[1], 2000);
         MockGaugeController(CURVE_GAUGE_CONTROLLER).setGaugeWeight(gauges[2], 3000);
-        gaugeRegistry.setGauge(gauges[0]);
-        gaugeRegistry.setGauge(gauges[1]);
-        gaugeRegistry.setGauge(gauges[2]);
+        gaugeRegistry.setGauge(0);
+        gaugeRegistry.setGauge(1);
+        gaugeRegistry.setGauge(2);
 
         uint256 currentEpoch = (block.timestamp / WEEK) * WEEK;
         vm.warp(currentEpoch + WEEK + 1);
@@ -224,10 +242,19 @@ contract DelegateNegativeWeightTest is Test {
             emit log_named_uint("      baseWeight", baseW);
             emit log_named_int("      adjustedWeight", adjW);
             emit log_named_int("      EFFECTIVE", int256(baseW) + adjW);
-            if (voted) { emit log_string("      voted: true"); } else { emit log_string("      voted: false"); }
+            if (voted) emit log_string("      voted: true");
+            else emit log_string("      voted: false");
 
-            (uint96 uiBase, int96 uiAdj, uint48 uiLastVote, uint16 uiYes, uint16 uiNo,
-             uint8 uiStatus, address uiDelegate, uint96 uiTotalDel) = dao.userInfo(daoPid, voter);
+            (
+                uint96 uiBase,
+                int96 uiAdj,
+                uint48 uiLastVote,
+                uint16 uiYes,
+                uint16 uiNo,
+                uint8 uiStatus,
+                address uiDelegate,
+                uint96 uiTotalDel
+            ) = dao.userInfo(daoPid, voter);
             emit log_named_uint("      lastVoteSyncNonce", uiLastVote);
             emit log_named_uint("      voteStatus", uiStatus);
             emit log_named_address("      delegate", uiDelegate);
@@ -268,8 +295,12 @@ contract DelegateNegativeWeightTest is Test {
         // Step 2: A votes GAUGE (no relock, same epoch - just a normal vote)
         address[] memory g = new address[](3);
         uint256[] memory w = new uint256[](3);
-        g[0] = gauges[0]; g[1] = gauges[1]; g[2] = gauges[2];
-        w[0] = 5000; w[1] = 3000; w[2] = 2000;
+        g[0] = gauges[0];
+        g[1] = gauges[1];
+        g[2] = gauges[2];
+        w[0] = 5000;
+        w[1] = 3000;
+        w[2] = 2000;
         actorA.gaugeVote(gaugePlatform, actorAddrs[0], g, w);
         _dumpState("After A votes GAUGE", daoPid);
 

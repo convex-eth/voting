@@ -7,10 +7,24 @@ import "../src/interface/IFxGauge.sol";
 import "../src/interface/IFxGaugeController.sol";
 
 contract MockFxGaugeController is IFxGaugeController {
-    mapping(address => uint256) public gauge_types;
+    mapping(uint256 => address) public gauges;
+    uint256 public n_gauges;
+    mapping(address => uint256) public gaugeTypes;
+    mapping(address => bool) public registeredGauges;
+
+    function setGauge(uint256 _gaugeId, address _gauge) external {
+        gauges[_gaugeId] = _gauge;
+        registeredGauges[_gauge] = true;
+        if (_gaugeId >= n_gauges) n_gauges = _gaugeId + 1;
+    }
 
     function setGaugeType(address _gauge, uint256 _type) external {
-        gauge_types[_gauge] = _type;
+        gaugeTypes[_gauge] = _type;
+    }
+
+    function gauge_types(address _gauge) external view override returns (uint256) {
+        require(registeredGauges[_gauge], "gauge is not added");
+        return gaugeTypes[_gauge];
     }
 }
 
@@ -36,6 +50,8 @@ contract FxGaugeRegistryTest is Test {
     address internal gauge = makeAddr("gauge");
     address internal nonOwner = makeAddr("nonOwner");
 
+    uint256 internal constant GAUGE_ID = 0;
+
     address constant GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
 
     function setUp() public {
@@ -44,28 +60,32 @@ contract FxGaugeRegistryTest is Test {
 
         vm.etch(GAUGE_CONTROLLER, address(mockController).code);
         vm.etch(gauge, address(mockGauge).code);
+        MockFxGaugeController(GAUGE_CONTROLLER).setGauge(GAUGE_ID, gauge);
 
-        address[] memory initial = new address[](0);
+        uint256[] memory initial = new uint256[](0);
         registry = new FxGaugeRegistry("Fx Gauge Registry", owner, initial);
     }
 
     function test_initialGaugesRegisteredWithoutValidation() public {
-        address[] memory initial = new address[](2);
-        initial[0] = gauge;
-        initial[1] = makeAddr("fakeGauge");
+        address fakeGauge = makeAddr("fakeGauge");
+        MockFxGaugeController(GAUGE_CONTROLLER).setGauge(1, fakeGauge);
+
+        uint256[] memory initial = new uint256[](2);
+        initial[0] = GAUGE_ID;
+        initial[1] = 1;
 
         FxGaugeRegistry reg = new FxGaugeRegistry("Fx Gauge Registry", owner, initial);
 
         assertEq(reg.gaugeLength(), 2);
         assertTrue(reg.isRegisteredGauge(gauge));
-        assertTrue(reg.isRegisteredGauge(makeAddr("fakeGauge")));
+        assertTrue(reg.isRegisteredGauge(fakeGauge));
         assertFalse(reg.isRegisteredGauge(makeAddr("nonExistent")));
     }
 
     function test_forceRemove() public {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
         MockFxGauge(gauge).setActive(true);
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
         assertEq(registry.gaugeLength(), 1);
 
         registry.forceRemove(gauge);
@@ -87,10 +107,10 @@ contract FxGaugeRegistryTest is Test {
     function test_setGaugeCannotReAddForceRemoved() public {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
         MockFxGauge(gauge).setActive(true);
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
         registry.forceRemove(gauge);
 
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
 
         assertFalse(registry.isRegisteredGauge(gauge));
         assertEq(registry.gaugeLength(), 0);
@@ -99,7 +119,7 @@ contract FxGaugeRegistryTest is Test {
     function test_reinstateForceRemoved() public {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
         MockFxGauge(gauge).setActive(true);
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
         registry.forceRemove(gauge);
         assertTrue(registry.forceRemoved(gauge));
 
@@ -141,10 +161,21 @@ contract FxGaugeRegistryTest is Test {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
         MockFxGauge(gauge).setActive(true);
 
+        registry.setGauge(GAUGE_ID);
+
+        assertEq(registry.gaugeLength(), 1);
+        assertTrue(registry.isRegisteredGauge(gauge));
+    }
+
+    function test_setGaugeByAddress_addsValid() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+
         registry.setGauge(gauge);
 
         assertEq(registry.gaugeLength(), 1);
         assertTrue(registry.isRegisteredGauge(gauge));
+        assertEq(registry.activeGauges(0), gauge);
     }
 
     function test_permissionlessSetGaugeAddsValidGauge() public {
@@ -152,13 +183,27 @@ contract FxGaugeRegistryTest is Test {
         MockFxGauge(gauge).setActive(true);
 
         vm.prank(nonOwner);
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
 
         assertEq(registry.gaugeLength(), 1);
         assertTrue(registry.isRegisteredGauge(gauge));
     }
 
     function test_setGauge_removesInvalid() public {
+        MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
+        MockFxGauge(gauge).setActive(true);
+
+        registry.setGauge(GAUGE_ID);
+        assertEq(registry.gaugeLength(), 1);
+
+        MockFxGauge(gauge).setActive(false);
+        registry.setGauge(GAUGE_ID);
+
+        assertEq(registry.gaugeLength(), 0);
+        assertFalse(registry.isRegisteredGauge(gauge));
+    }
+
+    function test_setGaugeByAddress_removesInvalid() public {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 0);
         MockFxGauge(gauge).setActive(true);
 
@@ -172,11 +217,27 @@ contract FxGaugeRegistryTest is Test {
         assertFalse(registry.isRegisteredGauge(gauge));
     }
 
+    function test_isValidGaugeUnregisteredReverts() public {
+        address unregisteredGauge = makeAddr("unregisteredGauge");
+        vm.etch(unregisteredGauge, address(mockGauge).code);
+
+        vm.expectRevert("gauge is not added");
+        registry.isValidGauge(unregisteredGauge);
+    }
+
+    function test_setGaugeByAddressUnregisteredReverts() public {
+        address unregisteredGauge = makeAddr("unregisteredGauge");
+        vm.etch(unregisteredGauge, address(mockGauge).code);
+
+        vm.expectRevert("gauge is not added");
+        registry.setGauge(unregisteredGauge);
+    }
+
     function test_setGauge_noop_invalid() public {
         MockFxGaugeController(GAUGE_CONTROLLER).setGaugeType(gauge, 2);
         MockFxGauge(gauge).setActive(true);
 
-        registry.setGauge(gauge);
+        registry.setGauge(GAUGE_ID);
 
         assertEq(registry.gaugeLength(), 0);
     }

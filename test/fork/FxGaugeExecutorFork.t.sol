@@ -12,11 +12,8 @@ contract FxGaugeExecutorForkTest is ForkSetup {
         forkHead();
     }
 
-    function _deployPlatform(address g1, address g2)
-        internal
-        returns (GaugeVotePlatform platform)
-    {
-        address[] memory initial = arr(g1, g2);
+    function _deployPlatform(address g1, address g2) internal returns (GaugeVotePlatform platform) {
+        uint256[] memory initial = ids(fxGaugeId(g1), fxGaugeId(g2));
         FxGaugeRegistry registry = new FxGaugeRegistry("Fx Gauge Registry", address(this), initial);
         (,, platform) = deployGaugePlatform(address(registry));
     }
@@ -36,11 +33,7 @@ contract FxGaugeExecutorForkTest is ForkSetup {
     }
 
     function _mockFxGaugeVoteCall() internal {
-        vm.mockCall(
-            FX_GAUGE_VOTER,
-            abi.encodeWithSelector(IFxGaugeVoter.voteGaugeWeight.selector),
-            bytes("")
-        );
+        vm.mockCall(FX_GAUGE_VOTER, abi.encodeWithSelector(IFxGaugeVoter.voteGaugeWeight.selector), bytes(""));
     }
 
     function testFork_partialFxGaugeBatchDoesNotMarkDone() public {

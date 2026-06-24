@@ -21,13 +21,14 @@ contract FxGaugeRegistry is Ownable2Step {
     /// @notice Creates a new FxGaugeRegistry contract
     /// @param _name Contract name identifier
     /// @param _owner Address of the contract owner
-    /// @param _initialGauges Array of initial gauge addresses
-    constructor(string memory _name, address _owner, address[] memory _initialGauges) Ownable(_owner) {
+    /// @param _initialGauges Array of initial gauge ids
+    constructor(string memory _name, address _owner, uint256[] memory _initialGauges) Ownable(_owner) {
         name = _name;
         for (uint256 i = 0; i < _initialGauges.length; i++) {
-            activeGauges.push(_initialGauges[i]);
-            activeGaugeIndex[_initialGauges[i]] = activeGauges.length;
-            emit SetGauge(_initialGauges[i], true);
+            address gauge = IFxGaugeController(gaugeController).gauges(_initialGauges[i]);
+            activeGauges.push(gauge);
+            activeGaugeIndex[gauge] = activeGauges.length;
+            emit SetGauge(gauge, true);
         }
     }
 
@@ -79,26 +80,40 @@ contract FxGaugeRegistry is Ownable2Step {
     }
 
     /// @notice Updates the active status of a single gauge
+    /// @param _gaugeId Gauge controller id to update
+    function setGauge(uint256 _gaugeId) external {
+        _setGauge(_gaugeId);
+    }
+
+    /// @notice Updates the active status of a single gauge
     /// @param _gauge Gauge address to update
     function setGauge(address _gauge) external {
         _setGauge(_gauge);
     }
 
     /// @notice Updates the active status of multiple gauges
-    /// @param _gauges Array of gauge addresses to update
-    function setGauges(address[] calldata _gauges) external {
-        for (uint256 i = 0; i < _gauges.length;) {
-            _setGauge(_gauges[i]);
-            unchecked { ++i; }
+    /// @param _gaugeIds Array of gauge controller ids to update
+    function setGauges(uint256[] calldata _gaugeIds) external {
+        for (uint256 i = 0; i < _gaugeIds.length;) {
+            _setGauge(_gaugeIds[i]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
     /// @notice Updates a gauge's active status based on its validity
-    function _setGauge(address _gauge) internal {
-        if (forceRemoved[_gauge]) return;
+    function _setGauge(uint256 _gaugeId) internal {
+        address gauge = IFxGaugeController(gaugeController).gauges(_gaugeId);
+        _setGauge(gauge);
+    }
 
-        bool isActive = isValidGauge(_gauge);
-        uint256 index = activeGaugeIndex[_gauge];
+    /// @notice Updates a gauge's active status based on its validity
+    function _setGauge(address gauge) internal {
+        if (forceRemoved[gauge]) return;
+
+        bool isActive = isValidGauge(gauge);
+        uint256 index = activeGaugeIndex[gauge];
 
         if (index > 0) {
             if (!isActive) {
@@ -107,14 +122,14 @@ contract FxGaugeRegistry is Ownable2Step {
                 activeGauges[index - 1] = swapped;
                 activeGaugeIndex[swapped] = index;
                 activeGauges.pop();
-                activeGaugeIndex[_gauge] = 0;
+                activeGaugeIndex[gauge] = 0;
             }
         } else if (isActive) {
-            activeGauges.push(_gauge);
-            activeGaugeIndex[_gauge] = activeGauges.length;
+            activeGauges.push(gauge);
+            activeGaugeIndex[gauge] = activeGauges.length;
         }
 
-        emit SetGauge(_gauge, isActive);
+        emit SetGauge(gauge, isActive);
     }
 
     /// @notice Returns the contract version

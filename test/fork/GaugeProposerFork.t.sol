@@ -13,7 +13,7 @@ contract GaugeProposerForkTest is ForkSetup {
     }
 
     function _deployProposer() internal returns (GaugeVotePlatform platform, GaugeProposer proposer) {
-        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
         (,, platform) = deployGaugePlatform(address(registry));
         proposer = new GaugeProposer("Convex Gauge Proposer", address(this), VLCVX, address(platform));
         platform.setOperator(address(proposer), true);

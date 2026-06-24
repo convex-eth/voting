@@ -41,10 +41,11 @@ contract GasProfile is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
 
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        platform = new GaugeVotePlatform("Convex Gauge Voting", 
+        platform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
             address(this),
             address(vlcvx),
             address(gaugeRegistry),
@@ -56,13 +57,16 @@ contract GasProfile is Test {
         gauge2 = new MockCurveGauge();
         gauge3 = new MockCurveGauge();
 
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(0, address(gauge1));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(1, address(gauge2));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(2, address(gauge3));
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge2), 2000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge3), 500);
 
-        gaugeRegistry.setGauge(address(gauge1));
-        gaugeRegistry.setGauge(address(gauge2));
-        gaugeRegistry.setGauge(address(gauge3));
+        gaugeRegistry.setGauge(0);
+        gaugeRegistry.setGauge(1);
+        gaugeRegistry.setGauge(2);
 
         platform.setOperator(operator, true);
     }
@@ -227,12 +231,15 @@ contract GasProfile is Test {
         MockCurveGauge gauge4 = new MockCurveGauge();
         MockCurveGauge gauge5 = new MockCurveGauge();
         MockCurveGauge gauge6 = new MockCurveGauge();
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(3, address(gauge4));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(4, address(gauge5));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(5, address(gauge6));
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge4), 1000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge5), 1000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge6), 1000);
-        gaugeRegistry.setGauge(address(gauge4));
-        gaugeRegistry.setGauge(address(gauge5));
-        gaugeRegistry.setGauge(address(gauge6));
+        gaugeRegistry.setGauge(3);
+        gaugeRegistry.setGauge(4);
+        gaugeRegistry.setGauge(5);
 
         vm.prank(alice);
         platform.vote(alice, _gauges3(address(gauge4), address(gauge5), address(gauge6)), _weights3(3333, 3333, 3334));

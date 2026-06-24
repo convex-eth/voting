@@ -78,10 +78,17 @@ contract LazyDelegationHandler is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(CURVE_GAUGE_CONTROLLER, gaugeController.code);
 
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
-        dao = new DaoVotePlatform("Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation));
-        gaugePlatform = new GaugeVotePlatform("Convex Gauge Voting", 
-            address(this), address(vlcvx), address(gaugeRegistry), address(surrogateRegistry), address(delegation)
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
+        dao = new DaoVotePlatform(
+            "Convex Dao Voting", address(this), address(vlcvx), address(surrogateRegistry), address(delegation)
+        );
+        gaugePlatform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
+            address(this),
+            address(vlcvx),
+            address(gaugeRegistry),
+            address(surrogateRegistry),
+            address(delegation)
         );
         dao.setOperator(operator, true);
         gaugePlatform.setOperator(operator, true);
@@ -259,8 +266,9 @@ contract LazyDelegationHandler is Test {
         for (uint256 i = 0; i < GAUGE_COUNT;) {
             MockCurveGauge gauge = new MockCurveGauge();
             gauges[i] = address(gauge);
+            MockGaugeController(CURVE_GAUGE_CONTROLLER).setGauge(i, address(gauge));
             MockGaugeController(CURVE_GAUGE_CONTROLLER).setGaugeWeight(address(gauge), (i + 1) * 1000);
-            gaugeRegistry.setGauge(address(gauge));
+            gaugeRegistry.setGauge(i);
             unchecked {
                 ++i;
             }

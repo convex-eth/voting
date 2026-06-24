@@ -6,6 +6,20 @@ import "../../src/interface/IGaugeController.sol";
 
 contract MockGaugeController is IGaugeController {
     mapping(address => uint256) public gaugeWeights;
+    mapping(uint256 => address) public gauges;
+    mapping(address => bool) public registeredGauges;
+    uint256 public n_gauges;
+
+    function setGauge(uint256 _gaugeId, address _gauge) external {
+        gauges[_gaugeId] = _gauge;
+        registeredGauges[_gauge] = true;
+        if (_gaugeId >= n_gauges) n_gauges = _gaugeId + 1;
+    }
+
+    function gauge_types(address _gauge) external view override returns (int128) {
+        require(registeredGauges[_gauge], "gauge is not added");
+        return 0;
+    }
 
     function setGaugeWeight(address _gauge, uint256 _weight) external {
         gaugeWeights[_gauge] = _weight;

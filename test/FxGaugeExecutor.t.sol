@@ -53,10 +53,11 @@ contract FxGaugeExecutorTest is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, gaugeController.code);
 
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        platform = new GaugeVotePlatform("Convex Gauge Voting", 
+        platform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
             address(this),
             address(vlcvx),
             address(gaugeRegistry),
@@ -80,13 +81,16 @@ contract FxGaugeExecutorTest is Test {
         gauge2 = new MockCurveGauge();
         gauge3 = new MockCurveGauge();
 
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(0, address(gauge1));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(1, address(gauge2));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(2, address(gauge3));
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge2), 2000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge3), 500);
 
-        gaugeRegistry.setGauge(address(gauge1));
-        gaugeRegistry.setGauge(address(gauge2));
-        gaugeRegistry.setGauge(address(gauge3));
+        gaugeRegistry.setGauge(0);
+        gaugeRegistry.setGauge(1);
+        gaugeRegistry.setGauge(2);
 
         platform.setOperator(operator, true);
     }

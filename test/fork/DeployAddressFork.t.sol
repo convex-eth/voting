@@ -35,14 +35,19 @@ contract DeployAddressForkTest is ForkSetup {
     }
 
     function testFork_localProtocolConstantsMatchForkConstants() public {
-        CurveGaugeRegistry curveRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
-        FxGaugeRegistry fxRegistry = new FxGaugeRegistry("Fx Gauge Registry", address(this), new address[](0));
-        CurveGaugeExecutor curveGaugeExecutor = new CurveGaugeExecutor("Curve Gauge Executor", address(0x1234), VOTE_DELEGATE_EXTENSION);
+        CurveGaugeRegistry curveRegistry =
+            new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
+        FxGaugeRegistry fxRegistry = new FxGaugeRegistry("Fx Gauge Registry", address(this), new uint256[](0));
+        CurveGaugeExecutor curveGaugeExecutor =
+            new CurveGaugeExecutor("Curve Gauge Executor", address(0x1234), VOTE_DELEGATE_EXTENSION);
         FxGaugeExecutor fxGaugeExecutor = new FxGaugeExecutor("Fx Gauge Executor", address(0x1234), address(this));
         (,, DaoVotePlatform daoPlatform) = deployDaoPlatform();
-        CurveDaoProposer curveDaoProposer = new CurveDaoProposer("Curve Dao Proposer", address(this), address(daoPlatform));
-        ResupplyDaoProposer resupplyDaoProposer = new ResupplyDaoProposer("Resupply Dao Proposer", address(this), address(daoPlatform));
-        ResupplyVoteExecutor resupplyVoteExecutor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(daoPlatform), 0);
+        CurveDaoProposer curveDaoProposer =
+            new CurveDaoProposer("Curve Dao Proposer", address(this), address(daoPlatform));
+        ResupplyDaoProposer resupplyDaoProposer =
+            new ResupplyDaoProposer("Resupply Dao Proposer", address(this), address(daoPlatform));
+        ResupplyVoteExecutor resupplyVoteExecutor =
+            new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(daoPlatform), 0);
 
         assertEq(curveRegistry.gaugeController(), CURVE_GAUGE_CONTROLLER);
         assertEq(fxRegistry.gaugeController(), FX_GAUGE_CONTROLLER);

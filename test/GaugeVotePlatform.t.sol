@@ -45,10 +45,11 @@ contract GaugeVotePlatformTest is Test {
         address gaugeController = address(new MockGaugeController());
         vm.etch(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB, address(gaugeController).code);
 
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
 
-        platform = new GaugeVotePlatform("Convex Gauge Voting", 
+        platform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
             address(this),
             address(vlcvx),
             address(gaugeRegistry),
@@ -60,13 +61,16 @@ contract GaugeVotePlatformTest is Test {
         gauge2 = new MockCurveGauge();
         gauge3 = new MockCurveGauge();
 
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(0, address(gauge1));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(1, address(gauge2));
+        MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGauge(2, address(gauge3));
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge1), 1000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge2), 2000);
         MockGaugeController(0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB).setGaugeWeight(address(gauge3), 500);
 
-        gaugeRegistry.setGauge(address(gauge1));
-        gaugeRegistry.setGauge(address(gauge2));
-        gaugeRegistry.setGauge(address(gauge3));
+        gaugeRegistry.setGauge(0);
+        gaugeRegistry.setGauge(1);
+        gaugeRegistry.setGauge(2);
 
         platform.setOperator(operator, true);
     }
@@ -437,7 +441,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del,) = platform.userInfo(pid, alice);
         assertEq(bw, 3000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -455,7 +459,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 daveBw, int256 daveAdj,,, address daveDel, ) = platform.userInfo(pid, dave);
+        (uint256 daveBw, int256 daveAdj,,, address daveDel,) = platform.userInfo(pid, dave);
         assertEq(daveBw, 0);
         assertGt(daveAdj, 0);
         assertEq(daveDel, dave);
@@ -518,7 +522,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(surrogate);
         platform.vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(1));
     }
 
@@ -536,7 +540,7 @@ contract GaugeVotePlatformTest is Test {
         vm.prank(alice);
         platform.vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
 
-        (,,, uint8 vs,, ) = platform.userInfo(pid, alice);
+        (,,, uint8 vs,,) = platform.userInfo(pid, alice);
         assertEq(vs, uint8(2));
     }
 
@@ -719,7 +723,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (uint256 bw, int256 adj,,, address del, ) = platform.userInfo(pid, alice);
+        (uint256 bw, int256 adj,,, address del,) = platform.userInfo(pid, alice);
         assertEq(bw, 1000 * WD);
         assertEq(adj, 0);
         assertEq(del, alice);
@@ -955,8 +959,8 @@ contract GaugeVotePlatformTest is Test {
         _vote(bob, _getGauges(address(gauge1)), _getWeights(10000));
 
         uint256 g1TotalAfterBob = platform.gaugeTotal(pid, address(gauge1));
-        uint256 expectedBobTotal = vlcvx.balanceAtEpochOf(proposalEpoch, bob)
-            + vlcvx.balanceAtEpochOf(proposalEpoch, alice);
+        uint256 expectedBobTotal =
+            vlcvx.balanceAtEpochOf(proposalEpoch, bob) + vlcvx.balanceAtEpochOf(proposalEpoch, alice);
         assertApproxEqAbs(g1TotalAfterBob, expectedBobTotal, WD);
 
         delegation.sync(alice);
@@ -1229,8 +1233,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = vlcvx.balanceAtEpochOf(proposalEpoch, alice)
-            + vlcvx.balanceAtEpochOf(proposalEpoch, bob)
-            + vlcvx.balanceAtEpochOf(proposalEpoch, carol);
+            + vlcvx.balanceAtEpochOf(proposalEpoch, bob) + vlcvx.balanceAtEpochOf(proposalEpoch, carol);
 
         _vote(carol, _getGauges(address(gauge1)), _getWeights(10000));
         _vote(alice, _getGauges(address(gauge2)), _getWeights(10000));
@@ -1251,8 +1254,7 @@ contract GaugeVotePlatformTest is Test {
         uint256 pid = _createProposal();
 
         uint256 expectedTotal = vlcvx.balanceAtEpochOf(proposalEpoch, alice)
-            + vlcvx.balanceAtEpochOf(proposalEpoch, bob)
-            + vlcvx.balanceAtEpochOf(proposalEpoch, carol)
+            + vlcvx.balanceAtEpochOf(proposalEpoch, bob) + vlcvx.balanceAtEpochOf(proposalEpoch, carol)
             + vlcvx.balanceAtEpochOf(proposalEpoch, dave);
 
         _vote(dave, _getGauges(address(gauge1)), _getWeights(10000));
@@ -1281,7 +1283,7 @@ contract GaugeVotePlatformTest is Test {
 
         _vote(alice, _getGauges(address(gauge1)), _getWeights(10000));
 
-        (,,,, address aliceDel, ) = platform.userInfo(pid, alice);
+        (,,,, address aliceDel,) = platform.userInfo(pid, alice);
         assertEq(aliceDel, bob);
     }
 

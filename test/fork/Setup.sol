@@ -104,13 +104,11 @@ abstract contract ForkSetup is Test, ForkConstants {
         for (uint256 i; i < gauges.length; i++) {
             if (!_isLiveValidCurveGauge(gauges[i])) return gauges[i];
         }
-        return address(1);
     }
 
     function killedCurveGauge() internal view returns (address gauge, bool found) {
         address[] memory gauges = curveGaugeCandidates();
         for (uint256 i; i < gauges.length; i++) {
-            if (_curveGaugeWeight(gauges[i]) == 0) continue;
             try ICurveGauge(gauges[i]).is_killed() returns (bool killed) {
                 if (killed) return (gauges[i], true);
             } catch {}
@@ -118,12 +116,24 @@ abstract contract ForkSetup is Test, ForkConstants {
     }
 
     function _isLiveValidCurveGauge(address gauge) internal view returns (bool) {
-        if (_curveGaugeWeight(gauge) == 0) return false;
+        try IGaugeController(CURVE_GAUGE_CONTROLLER).gauge_types(gauge) returns (int128) {}
+        catch {
+            return false;
+        }
+
         try ICurveGauge(gauge).is_killed() returns (bool killed) {
             return !killed;
         } catch {
             return false;
         }
+    }
+
+    function curveGaugeId(address gauge) internal view returns (uint256) {
+        uint256 gaugeCount = IGaugeController(CURVE_GAUGE_CONTROLLER).n_gauges();
+        for (uint256 i; i < gaugeCount; i++) {
+            if (IGaugeController(CURVE_GAUGE_CONTROLLER).gauges(i) == gauge) return i;
+        }
+        revert("curve gauge id not found");
     }
 
     function _curveGaugeWeight(address gauge) internal view returns (uint256) {
@@ -240,13 +250,23 @@ abstract contract ForkSetup is Test, ForkConstants {
         return false;
     }
 
+    function fxGaugeId(address gauge) internal view returns (uint256) {
+        uint256 gaugeCount = IFxGaugeController(FX_GAUGE_CONTROLLER).n_gauges();
+        for (uint256 i; i < gaugeCount; i++) {
+            if (IFxGaugeController(FX_GAUGE_CONTROLLER).gauges(i) == gauge) return i;
+        }
+        revert("fx gauge id not found");
+    }
+
     function deployGaugePlatform(address registry)
         internal
         returns (Delegation delegation, SurrogateRegistry surrogateRegistry, GaugeVotePlatform platform)
     {
         delegation = new Delegation("Convex Delegation", address(this), VLCVX);
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
-        platform = new GaugeVotePlatform("Convex Gauge Voting", address(this), VLCVX, registry, address(surrogateRegistry), address(delegation));
+        platform = new GaugeVotePlatform(
+            "Convex Gauge Voting", address(this), VLCVX, registry, address(surrogateRegistry), address(delegation)
+        );
     }
 
     function deployDaoPlatform()
@@ -255,7 +275,9 @@ abstract contract ForkSetup is Test, ForkConstants {
     {
         delegation = new Delegation("Convex Delegation", address(this), VLCVX);
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
-        platform = new DaoVotePlatform("Convex Dao Voting", address(this), VLCVX, address(surrogateRegistry), address(delegation));
+        platform = new DaoVotePlatform(
+            "Convex Dao Voting", address(this), VLCVX, address(surrogateRegistry), address(delegation)
+        );
     }
 
     function createGaugeProposal(GaugeVotePlatform platform, uint256 proposalLength) internal returns (uint256 pid) {
@@ -287,14 +309,19 @@ abstract contract ForkSetup is Test, ForkConstants {
         vm.warp(uint256(endTime) + platform.finalizationTime() + TIME_BUFFER);
     }
 
-    function voteGaugeAsHolder(GaugeVotePlatform platform, address holder, address[] memory gauges, uint256[] memory voteWeights)
-        internal
-    {
+    function voteGaugeAsHolder(
+        GaugeVotePlatform platform,
+        address holder,
+        address[] memory gauges,
+        uint256[] memory voteWeights
+    ) internal {
         vm.prank(holder);
         platform.vote(holder, gauges, voteWeights);
     }
 
-    function voteDaoAsHolder(DaoVotePlatform platform, uint256 pid, address holder, uint256 yesWeight, uint256 noWeight) internal {
+    function voteDaoAsHolder(DaoVotePlatform platform, uint256 pid, address holder, uint256 yesWeight, uint256 noWeight)
+        internal
+    {
         vm.prank(holder);
         platform.vote(pid, holder, yesWeight, noWeight);
     }
@@ -306,6 +333,12 @@ abstract contract ForkSetup is Test, ForkConstants {
 
     function arr(address a, address b) internal pure returns (address[] memory values) {
         values = new address[](2);
+        values[0] = a;
+        values[1] = b;
+    }
+
+    function ids(uint256 a, uint256 b) internal pure returns (uint256[] memory values) {
+        values = new uint256[](2);
         values[0] = a;
         values[1] = b;
     }

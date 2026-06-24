@@ -31,9 +31,10 @@ contract GaugeProposerTest is Test {
 
         delegation = new Delegation("Convex Delegation", address(this), address(vlcvx));
         surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
-        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        gaugeRegistry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
 
-        gaugeVotePlatform = new GaugeVotePlatform("Convex Gauge Voting", 
+        gaugeVotePlatform = new GaugeVotePlatform(
+            "Convex Gauge Voting",
             owner,
             address(vlcvx),
             address(gaugeRegistry),

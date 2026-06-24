@@ -50,9 +50,9 @@ contract RegistryForkFuzzTest is ForkSetup {
         address[] memory candidates = curveGaugeCandidates();
         address gauge = candidates[bound(seed, 0, candidates.length - 1)];
         bool expected = _isLiveValidCurveGauge(gauge);
-        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new address[](0));
+        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), new uint256[](0));
 
-        registry.setGauge(gauge);
+        registry.setGauge(curveGaugeId(gauge));
 
         assertEq(registry.isRegisteredGauge(gauge), expected);
         assertEq(registry.gaugeLength(), expected ? 1 : 0);
@@ -63,9 +63,9 @@ contract RegistryForkFuzzTest is ForkSetup {
         address[] memory candidates = fxGaugeCandidates();
         address gauge = candidates[bound(seed, 0, candidates.length - 1)];
         bool expected = _isLiveValidFxGauge(gauge);
-        FxGaugeRegistry registry = new FxGaugeRegistry("Fx Gauge Registry", address(this), new address[](0));
+        FxGaugeRegistry registry = new FxGaugeRegistry("Fx Gauge Registry", address(this), new uint256[](0));
 
-        registry.setGauge(gauge);
+        registry.setGauge(fxGaugeId(gauge));
 
         assertEq(registry.isRegisteredGauge(gauge), expected);
         assertEq(registry.gaugeLength(), expected ? 1 : 0);
@@ -78,12 +78,14 @@ contract GaugeExecutorForkFuzzTest is ForkSetup {
     }
 
     function _curvePlatform(address g1, address g2) internal returns (GaugeVotePlatform platform) {
-        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), arr(g1, g2));
+        CurveGaugeRegistry registry =
+            new CurveGaugeRegistry("Curve Gauge Registry", address(this), ids(curveGaugeId(g1), curveGaugeId(g2)));
         (,, platform) = deployGaugePlatform(address(registry));
     }
 
     function _fxPlatform(address g1, address g2) internal returns (GaugeVotePlatform platform) {
-        FxGaugeRegistry registry = new FxGaugeRegistry("Fx Gauge Registry", address(this), arr(g1, g2));
+        FxGaugeRegistry registry =
+            new FxGaugeRegistry("Fx Gauge Registry", address(this), ids(fxGaugeId(g1), fxGaugeId(g2)));
         (,, platform) = deployGaugePlatform(address(registry));
     }
 
@@ -113,7 +115,8 @@ contract GaugeExecutorForkFuzzTest is ForkSetup {
         finalizeGaugeProposal(platform, pid);
 
         ForkRecordingVoteDelegate voteDelegate = new ForkRecordingVoteDelegate();
-        CurveGaugeExecutor executor = new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
+        CurveGaugeExecutor executor =
+            new CurveGaugeExecutor("Curve Gauge Executor", address(platform), address(voteDelegate));
         executor.executeGaugeVote(pid, arr(g1, g2));
 
         (uint256 expectedA, uint256 expectedB) = _expectedSubmittedWeights(platform, pid, g1, g2);
@@ -176,7 +179,8 @@ contract LazyDelegationForkFuzzTest is ForkSetup {
         uint256 weightB = WEIGHT_BPS - weightA;
         (address holder,, uint256 holderWeight) = liveVlCvxHolder();
         (address g1, address g2) = twoLiveCurveGauges();
-        CurveGaugeRegistry registry = new CurveGaugeRegistry("Curve Gauge Registry", address(this), arr(g1, g2));
+        CurveGaugeRegistry registry =
+            new CurveGaugeRegistry("Curve Gauge Registry", address(this), ids(curveGaugeId(g1), curveGaugeId(g2)));
         (,, GaugeVotePlatform platform) = deployGaugePlatform(address(registry));
 
         uint256 pid = createGaugeProposal(platform, 1 days);
@@ -217,7 +221,9 @@ contract DaoExecutorForkFuzzTest is ForkSetup {
         uint256 quorum = bound(rawQuorum, 0, WEIGHT_BPS);
         (DaoVotePlatform platform, uint256 pid, uint256 participationBps) = _liveVotedFinalizedProposal(yesWeight);
         ForkRecordingDaoVoteDelegate voteDelegate = new ForkRecordingDaoVoteDelegate();
-        CurveVoteExecutor executor = new CurveVoteExecutor("Curve Vote Executor", address(this), address(platform), address(voteDelegate), quorum);
+        CurveVoteExecutor executor = new CurveVoteExecutor(
+            "Curve Vote Executor", address(this), address(platform), address(voteDelegate), quorum
+        );
 
         if (quorum > participationBps) {
             vm.expectRevert(CurveVoteExecutor.QuorumNotMet.selector);
@@ -236,7 +242,8 @@ contract DaoExecutorForkFuzzTest is ForkSetup {
         uint256 yesWeight = bound(rawYesWeight, 0, WEIGHT_BPS);
         uint256 quorum = bound(rawQuorum, 0, WEIGHT_BPS);
         (DaoVotePlatform platform, uint256 pid, uint256 participationBps) = _liveVotedFinalizedProposal(yesWeight);
-        ResupplyVoteExecutor executor = new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(platform), quorum);
+        ResupplyVoteExecutor executor =
+            new ResupplyVoteExecutor("Resupply Vote Executor", address(this), address(platform), quorum);
 
         if (quorum > participationBps) {
             vm.expectRevert(ResupplyVoteExecutor.QuorumNotMet.selector);
