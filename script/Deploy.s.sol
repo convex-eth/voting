@@ -53,6 +53,7 @@ contract Deploy is Script {
     address constant CONVEX_DEPLOYER = 0x947B7742C403f20e5FaCcDAc5E092C943E7D0277;
     address constant VOTE_DELEGATE = 0x5349ffba494aC3c888ffa16fD438F44B8c67fB07;
     address constant VOTIUM = 0xde1E6A7ED0ad3F61D531a8a78E83CcDdbd6E0c49;
+    address constant CONVEX_CORE = 0xCC07e8BA6bc8aeb18C4AE110C3Da9c7Dce4A3e74;
     address constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
     address constant FX_GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
 
@@ -134,14 +135,12 @@ contract Deploy is Script {
     }
 
     function run() external {
-        address[] memory initialOperators = new address[](2);
-        initialOperators[0] = CONVEX_DEPLOYER;
-        initialOperators[1] = MSIG;
+        if (CONVEX_CORE.code.length == 0) revert("ConvexCore not deployed");
+        core = ConvexCore(CONVEX_CORE);
 
         vm.startBroadcast(CONVEX_DEPLOYER);
 
-        // ── 1. Deploy ConvexCore ──
-        core = new ConvexCore(initialOperators);
+        // ── 1. Use existing ConvexCore ──
         console.log("ConvexCore:", address(core));
 
         // ── 2. Deploy VotingRegistry ──
