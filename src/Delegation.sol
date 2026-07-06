@@ -42,9 +42,13 @@ contract Delegation is Ownable2Step {
     error InitializationClosed();
     error ArrayLengthMismatch();
 
+    event UserLocksGasLimitSet(uint256 userLocksGasLimit);
+
     bool public initializationComplete;
 
     uint256 public syncNonce;
+
+    uint256 public userLocksGasLimit = 10_000;
 
     mapping(address => SetDelegateRecord[]) public delegateHistory;
     mapping(address => mapping(uint256 => EpochWeightingEntry)) public userEpochWeights;
@@ -72,6 +76,7 @@ contract Delegation is Ownable2Step {
 
         vlCVX.checkpointEpoch();
         uint256 nextEpoch = vlCVX.epochCount() - 1;
+        uint256 gasLimit = userLocksGasLimit;
 
         for (uint256 i = 0; i < len;) {
             address user = _users[i];
@@ -86,7 +91,16 @@ contract Delegation is Ownable2Step {
             }
 
             history.push(SetDelegateRecord({delegate: delegate, startingEpoch: uint32(nextEpoch)}));
-            _syncUser(user, delegate, nextEpoch, FILL_EPOCHS);
+            (uint112 locked, , uint32 nextUnlockIndex) = vlCVX.balances(user);
+            if (locked > 0) {
+                try vlCVX.userLocks{gas: gasLimit}(user, nextUnlockIndex) returns (
+                    uint112 firstAmount, uint112, uint32 firstUnlockTime
+                ) {
+                    if (firstAmount > 0 && firstUnlockTime > block.timestamp) {
+                        _syncUser(user, delegate, nextEpoch, FILL_EPOCHS);
+                    }
+                } catch {}
+            }
             emit DelegateSet(user, delegate);
             unchecked { ++i; }
         }
@@ -96,6 +110,12 @@ contract Delegation is Ownable2Step {
     function completeInitialization() external onlyOwner {
         initializationComplete = true;
         emit InitializationComplete();
+    }
+
+    /// @notice Sets gas forwarded to vlCVX userLocks probes
+    function setUserLocksGasLimit(uint256 _userLocksGasLimit) external onlyOwner {
+        userLocksGasLimit = _userLocksGasLimit;
+        emit UserLocksGasLimitSet(_userLocksGasLimit);
     }
 
     /// @notice Sets or changes a delegate for the caller
@@ -196,7 +216,8 @@ contract Delegation is Ownable2Step {
 
         (uint112 _locked, , uint32 nextUnlockIndex) = vlCVX.balances(_user);
         if (_locked > 0) {
-            (uint112 firstAmount, , uint32 firstUnlockTime) = vlCVX.userLocks(_user, nextUnlockIndex);
+            (uint112 firstAmount, , uint32 firstUnlockTime) =
+                vlCVX.userLocks{gas: userLocksGasLimit}(_user, nextUnlockIndex);
             if (firstAmount > 0 && firstUnlockTime <= block.timestamp) revert ExpiredLocks();
         }
 
@@ -272,6 +293,7 @@ contract Delegation is Ownable2Step {
         unchecked { endEpoch = _startEpoch + _numEpochs; }
 
         (uint112 _locked, , uint32 nextUnlockIndex) = vlCVX.balances(_user);
+        uint256 gasLimit = userLocksGasLimit;
 
         uint256[17] memory epochWeights;
 
@@ -279,10 +301,12 @@ contract Delegation is Ownable2Step {
             for (uint256 i = nextUnlockIndex; i < nextUnlockIndex + 17;) {
                 uint112 lockBoosted;
                 uint32 unlockTime;
-                try vlCVX.userLocks(_user, i) returns (uint112 _amount, uint112 _boosted, uint32 _unlockTime) {
-                    if (_amount > 0 && _unlockTime <= block.timestamp) revert ExpiredLocks();
+                try vlCVX.userLocks{gas: gasLimit}(_user, i) returns (
+                    uint112 _amount, uint112 _boosted, uint32 _lockUnlockTime
+                ) {
+                    if (_amount > 0 && _lockUnlockTime <= block.timestamp) revert ExpiredLocks();
                     lockBoosted = _boosted;
-                    unlockTime = _unlockTime;
+                    unlockTime = _lockUnlockTime;
                 } catch {
                     break;
                 }

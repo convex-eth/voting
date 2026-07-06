@@ -58,6 +58,7 @@ contract Deploy is Script {
     address constant FX_GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
 
     uint256 constant DEFAULT_QUORUM = 1500; // 15%
+    uint256 constant DELEGATE_SEED_BATCH_SIZE = 50;
 
     uint8 constant VOTE_DAO = 0;
     uint8 constant VOTE_GAUGE = 1;
@@ -93,16 +94,18 @@ contract Deploy is Script {
     }
 
     function _seedDelegates(address _delegation, address[] memory _users, address[] memory _delegates) internal {
-        for (uint256 i = 0; i < 3;) {
-            uint256 start = _users.length * i / 3;
-            uint256 end = _users.length * (i + 1) / 3;
+        uint256 batch;
+        for (uint256 start = 0; start < _users.length;) {
+            uint256 end = start + DELEGATE_SEED_BATCH_SIZE;
+            if (end > _users.length) end = _users.length;
             address[] memory users = _sliceAddresses(_users, start, end);
             address[] memory delegates = _sliceAddresses(_delegates, start, end);
             core.execute(_delegation, abi.encodeWithSignature("seedDelegates(address[],address[])", users, delegates));
-            console.log("Seeded Gauge Delegation batch", i + 1);
+            console.log("Seeded Gauge Delegation batch", batch + 1);
             console.log("Batch delegate count", users.length);
+            start = end;
             unchecked {
-                ++i;
+                ++batch;
             }
         }
     }
