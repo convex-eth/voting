@@ -5,8 +5,13 @@ libs = ["lib"]
 viaIR = true
 optimizer = true
 optimizer_runs = 200
+fs_permissions = [
+    { access = "read", path = "./data" },
+    { access = "read-write", path = "./deployment" }
+]
 
 [rpc_endpoints]
 local = "http://localhost:8545"
+mainnet = "https://ethereum-rpc.publicnode.com"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

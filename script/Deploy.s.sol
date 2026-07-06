@@ -78,6 +78,35 @@ contract Deploy is Script {
         core.execute(_executor, abi.encodeWithSignature("setGuardian(address,bool)", _guardian, true));
     }
 
+    function _sliceAddresses(address[] memory _addresses, uint256 _start, uint256 _end)
+        internal
+        pure
+        returns (address[] memory sliced)
+    {
+        sliced = new address[](_end - _start);
+        for (uint256 i = 0; i < sliced.length;) {
+            sliced[i] = _addresses[_start + i];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function _seedDelegates(address _delegation, address[] memory _users, address[] memory _delegates) internal {
+        for (uint256 i = 0; i < 3;) {
+            uint256 start = _users.length * i / 3;
+            uint256 end = _users.length * (i + 1) / 3;
+            address[] memory users = _sliceAddresses(_users, start, end);
+            address[] memory delegates = _sliceAddresses(_delegates, start, end);
+            core.execute(_delegation, abi.encodeWithSignature("seedDelegates(address[],address[])", users, delegates));
+            console.log("Seeded Gauge Delegation batch", i + 1);
+            console.log("Batch delegate count", users.length);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function _activeCurveGaugeIds() internal view returns (uint256[] memory ids) {
         uint256 total = IGaugeController(CURVE_GAUGE_CONTROLLER).n_gauges();
         if (total > GaugeList.GAUGE_COUNT) total = GaugeList.GAUGE_COUNT;
@@ -157,11 +186,7 @@ contract Deploy is Script {
         string memory json = vm.readFile("data/vlcvx_delegations_arrays.json");
         address[] memory seedUsers = json.readAddressArray(".users");
         address[] memory seedDelegates = json.readAddressArray(".delegates");
-        core.execute(
-            address(gaugeDelegation),
-            abi.encodeWithSignature("seedDelegates(address[],address[])", seedUsers, seedDelegates)
-        );
-        console.log("Seeded Gauge Delegation with", seedUsers.length, "delegates");
+        _seedDelegates(address(gaugeDelegation), seedUsers, seedDelegates);
         core.execute(address(gaugeDelegation), abi.encodeWithSignature("completeInitialization()"));
         console.log("Completed Gauge Delegation initialization");
         core.execute(address(daoDelegation), abi.encodeWithSignature("completeInitialization()"));
@@ -312,7 +337,9 @@ contract Deploy is Script {
 
         core.execute(
             address(registry),
-            abi.encodeWithSignature("setVotingContract(string,uint8,address)", "HELPER", 2, address(curveGaugeHelper))
+            abi.encodeWithSignature(
+                "setVotingContract(string,uint8,address)", "HELPER", VOTE_GAUGE, address(curveGaugeHelper)
+            )
         );
         console.log("Registered HELPER -> GAUGE_HELPER");
 
@@ -793,6 +820,7 @@ contract Deploy is Script {
         vm.serializeAddress("deploy", "SurrogateRegistry", address(surrogateRegistry));
         string memory finalJson = vm.serializeAddress("deploy", "VoteDelegateExtension", VOTE_DELEGATE);
 
+        vm.createDir("deployment", true);
         vm.writeJson(finalJson, "deployment/mainnet.json");
     }
 }
