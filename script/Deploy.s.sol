@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import "forge-std/Script.sol";
 import "forge-std/StdJson.sol";
 import "../src/ConvexCore.sol";
-import "../src/GaugeList.sol";
 import "../src/VotingRegistry.sol";
 import "../src/Delegation.sol";
 import "../src/SurrogateRegistry.sol";
@@ -22,9 +21,6 @@ import "../src/GaugeProposer.sol";
 import "../src/GenericDaoProposer.sol";
 import "../src/GaugeVoteHelper.sol";
 import "../src/ProposalMetadata.sol";
-import "../src/interface/ICurveGauge.sol";
-import "../src/interface/IFxGaugeController.sol";
-import "../src/interface/IGaugeController.sol";
 
 // ============================================================================
 // Deploy Script for Convex Voting Project
@@ -54,11 +50,8 @@ contract Deploy is Script {
     address constant VOTE_DELEGATE = 0x5349ffba494aC3c888ffa16fD438F44B8c67fB07;
     address constant VOTIUM = 0xde1E6A7ED0ad3F61D531a8a78E83CcDdbd6E0c49;
     address constant CONVEX_CORE = 0xCC07e8BA6bc8aeb18C4AE110C3Da9c7Dce4A3e74;
-    address constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
-    address constant FX_GAUGE_CONTROLLER = 0xe60eB8098B34eD775ac44B1ddE864e098C6d7f37;
 
     uint256 constant DEFAULT_QUORUM = 1500; // 15%
-    uint256 constant DELEGATE_SEED_BATCH_SIZE = 50;
 
     uint8 constant VOTE_DAO = 0;
     uint8 constant VOTE_GAUGE = 1;
@@ -77,93 +70,6 @@ contract Deploy is Script {
 
     function _setGuardian(address _executor, address _guardian) internal {
         core.execute(_executor, abi.encodeWithSignature("setGuardian(address,bool)", _guardian, true));
-    }
-
-    function _sliceAddresses(address[] memory _addresses, uint256 _start, uint256 _end)
-        internal
-        pure
-        returns (address[] memory sliced)
-    {
-        sliced = new address[](_end - _start);
-        for (uint256 i = 0; i < sliced.length;) {
-            sliced[i] = _addresses[_start + i];
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _seedDelegates(address _delegation, address[] memory _users, address[] memory _delegates) internal {
-        uint256 batch;
-        for (uint256 start = 0; start < _users.length;) {
-            uint256 end = start + DELEGATE_SEED_BATCH_SIZE;
-            if (end > _users.length) end = _users.length;
-            address[] memory users = _sliceAddresses(_users, start, end);
-            address[] memory delegates = _sliceAddresses(_delegates, start, end);
-            core.execute(_delegation, abi.encodeWithSignature("seedDelegates(address[],address[])", users, delegates));
-            console.log("Seeded Gauge Delegation batch", batch + 1);
-            console.log("Batch delegate count", users.length);
-            start = end;
-            unchecked {
-                ++batch;
-            }
-        }
-    }
-
-    function _activeCurveGaugeIds() internal view returns (uint256[] memory ids) {
-        uint256 total = IGaugeController(CURVE_GAUGE_CONTROLLER).n_gauges();
-        if (total > GaugeList.GAUGE_COUNT) total = GaugeList.GAUGE_COUNT;
-
-        uint256 activeCount;
-        for (uint256 i = 0; i < total;) {
-            address gauge = IGaugeController(CURVE_GAUGE_CONTROLLER).gauges(i);
-            if (_isActiveCurveGauge(gauge)) activeCount++;
-            unchecked {
-                ++i;
-            }
-        }
-
-        ids = new uint256[](activeCount);
-        uint256 cursor;
-        for (uint256 i = 0; i < total;) {
-            address gauge = IGaugeController(CURVE_GAUGE_CONTROLLER).gauges(i);
-            if (_isActiveCurveGauge(gauge)) {
-                ids[cursor] = i;
-                cursor++;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _isActiveCurveGauge(address _gauge) internal view returns (bool) {
-        if (_gauge == address(0)) return false;
-        (bool ok, bytes memory result) = _gauge.staticcall(abi.encodeWithSelector(ICurveGauge.is_killed.selector));
-        return ok && result.length >= 32 && !abi.decode(result, (bool));
-    }
-
-    function _fxGaugeIdsForAddresses(address[] memory _gauges) internal view returns (uint256[] memory ids) {
-        uint256 total = IFxGaugeController(FX_GAUGE_CONTROLLER).n_gauges();
-        ids = new uint256[](_gauges.length);
-
-        for (uint256 i = 0; i < _gauges.length;) {
-            bool found;
-            for (uint256 j = 0; j < total;) {
-                if (IFxGaugeController(FX_GAUGE_CONTROLLER).gauges(j) == _gauges[i]) {
-                    ids[i] = j;
-                    found = true;
-                    break;
-                }
-                unchecked {
-                    ++j;
-                }
-            }
-            require(found, "FX gauge not found");
-            unchecked {
-                ++i;
-            }
-        }
     }
 
     function run() external {
@@ -186,14 +92,9 @@ contract Deploy is Script {
         Delegation gaugeDelegation = new Delegation("Gauge Delegation", address(core), VLCVX);
         console.log("Delegation (Gauge):", address(gaugeDelegation));
 
-        string memory json = vm.readFile("data/vlcvx_delegations_arrays.json");
-        address[] memory seedUsers = json.readAddressArray(".users");
-        address[] memory seedDelegates = json.readAddressArray(".delegates");
-        _seedDelegates(address(gaugeDelegation), seedUsers, seedDelegates);
-        core.execute(address(gaugeDelegation), abi.encodeWithSignature("completeInitialization()"));
-        console.log("Completed Gauge Delegation initialization");
         core.execute(address(daoDelegation), abi.encodeWithSignature("completeInitialization()"));
         console.log("Completed DAO Delegation initialization");
+        console.log("Gauge Delegation initialization left open for SeedDelegates script");
 
         // ── 4. Deploy SurrogateRegistry ──
         SurrogateRegistry surrogateRegistry = new SurrogateRegistry("Convex Surrogate Registry");
@@ -397,62 +298,11 @@ contract Deploy is Script {
         );
         console.log("Registered FX -> GAUGE_REGISTRY");
 
-        address[] memory fxGaugeAddresses = new address[](42);
-        fxGaugeAddresses[0] = 0xA5250C540914E012E22e623275E290c4dC993D11;
-        fxGaugeAddresses[1] = 0xfEFafB9446d84A9e58a3A2f2DDDd7219E8c94FbB;
-        fxGaugeAddresses[2] = 0x5b1D12365BEc01b8b672eE45912d1bbc86305dba;
-        fxGaugeAddresses[3] = 0x9710Ca7F3eDD4893f399c89ea184D92cc7172e28;
-        fxGaugeAddresses[4] = 0xf422446F7730e50B9CAb4618343425d9927b35ED;
-        fxGaugeAddresses[5] = 0xB3886b8c94C8635B786b1CA88942337669BB1e1E;
-        fxGaugeAddresses[6] = 0xF4Bd6D66bAFEA1E0500536d52236f64c3e8a2a84;
-        fxGaugeAddresses[7] = 0xeD113B925AC3f972161Be012cdFEE33470040E6a;
-        fxGaugeAddresses[8] = 0x61F32964C39Cca4353144A6DB2F8Efdb3216b35B;
-        fxGaugeAddresses[9] = 0xfa4761512aaf899b010438a10C60D01EBdc0eFcA;
-        fxGaugeAddresses[10] = 0x31b630B21065664dDd2dBa0eD3a60D8ff59501F0;
-        fxGaugeAddresses[11] = 0xf0A3ECed42Dbd8353569639c0eaa833857aA0A75;
-        fxGaugeAddresses[12] = 0xDbA9a415bae1983a945ba078150CAe8b690c9229;
-        fxGaugeAddresses[13] = 0x0d3e9A29E856CF00d670368a7ab0512cb0c29FAC;
-        fxGaugeAddresses[14] = 0xf594bDfafE4197144C6459FcA611d7B868d36bEa;
-        fxGaugeAddresses[15] = 0x697DDb8e742047561C8e4bB69d2DDB1b8Bb42b60;
-        fxGaugeAddresses[16] = 0x9c7003bC16F2A1AA47451C858FEe6480B755363e;
-        fxGaugeAddresses[17] = 0xb2E43ECecA7c110c74Cf13Ba35105B0633B74E91;
-        fxGaugeAddresses[18] = 0xDF7fbDBAE50C7931a11765FAEd9fe1A002605B55;
-        fxGaugeAddresses[19] = 0x5801Bb8f568979C722176Df36b1a74654A9C52b5;
-        fxGaugeAddresses[20] = 0x4CA79F4FE25BCD329445CDBE7E065427ACa98380;
-        fxGaugeAddresses[21] = 0x4E6A1dC233f264dd07b63E206Fc451d986bA9908;
-        fxGaugeAddresses[22] = 0x9516c367952430371A733E5eBb587E01eE082F99;
-        fxGaugeAddresses[23] = 0xf1E141C804BA39b4a031fDF46e8c08dBa7a0df60;
-        fxGaugeAddresses[24] = 0x0B700C60de435D522081cC5eB12B63875FE7e65a;
-        fxGaugeAddresses[25] = 0xb5152D159fce50a7576eBa7FAb61C2B98F0Ed692;
-        fxGaugeAddresses[26] = 0x7a505e920d5d7E4b402D9Ee345fB7E8Cdc265262;
-        fxGaugeAddresses[27] = 0xEd92dDe3214c24Ae04F5f96927E3bE8f8DbC3289;
-        fxGaugeAddresses[28] = 0x215D87bd3c7482E2348338815E059DE07Daf798A;
-        fxGaugeAddresses[29] = 0xa295829c082C4d21fE37dbC8C96bFa0ef6dbaa92;
-        fxGaugeAddresses[30] = 0x8d9186Fa822624bad50a5cB2545048CB26b4E65E;
-        fxGaugeAddresses[31] = 0x6FcFe767c479ef1f2d8c7A4b27e2aBaDD355910F;
-        fxGaugeAddresses[32] = 0x2122a2bee97545595550b85379AC7676Fd21a5B4;
-        fxGaugeAddresses[33] = 0xE534E5e86382d64133ecd6b7f717C69BEC8B40CA;
-        fxGaugeAddresses[34] = 0x7d4674b837429c44914961cb9F21dD6dEFd0eee0;
-        fxGaugeAddresses[35] = 0x0BbfD53Ec934e5d4d3d55dD860642aDD395De979;
-        fxGaugeAddresses[36] = 0xeD9ED685F553B0827a58a918E64eC02E6FD55799;
-        fxGaugeAddresses[37] = 0xA3c0f7360b922136cc8B89063BE1e8daF70427bD;
-        fxGaugeAddresses[38] = 0x695C6F5ed9CEB6709E00C08e1326710F3169B922;
-        fxGaugeAddresses[39] = 0x288810cdbdFEd9EA3Be3cA4E421Ab795FD0669f3;
-        fxGaugeAddresses[40] = 0xABc8cBbA768DA396626FAD97D0e61104aC1e7068;
-        fxGaugeAddresses[41] = 0xcF904d377604bCCcB328e51204CA30203F635259;
-        uint256[] memory fxGauges = _fxGaugeIdsForAddresses(fxGaugeAddresses);
-        (bool fxOk,) = address(fxGaugeRegistry).call(abi.encodeWithSignature("setGauges(uint256[])", fxGauges));
-        if (fxOk) {
-            console.log("Registered FX gauges");
-        } else {
-            console.log("FX gauge batch failed, registering individually");
-            for (uint256 i = 0; i < fxGauges.length; i++) {
-                (bool ok,) = address(fxGaugeRegistry).call(abi.encodeWithSignature("setGauge(uint256)", fxGauges[i]));
-                if (ok) {
-                    console.log("FX gauge registered", i);
-                }
-            }
-        }
+        string memory fxGaugeJson = vm.readFile("data/fx_gauge_ids.json");
+        uint256[] memory fxGauges = fxGaugeJson.readUintArray(".ids");
+        console.log("FX gauge id count", fxGauges.length);
+        fxGaugeRegistry.setGauges(fxGauges);
+        console.log("Registered FX gauges");
 
         // ── 13. Deploy F(x) DaoVoting ──
         DaoVotePlatform fxDaoVoting = new DaoVotePlatform(
@@ -740,7 +590,9 @@ contract Deploy is Script {
         console.log("Set ResupplyDaoProposer as operator on ResupplyDaoVoting");
 
         // ── 28. Register Convex Gauges ──
-        uint256[] memory allGauges = _activeCurveGaugeIds();
+        string memory curveGaugeJson = vm.readFile("data/curve_gauge_ids.json");
+        uint256[] memory allGauges = curveGaugeJson.readUintArray(".ids");
+        console.log("Curve gauge id count", allGauges.length);
         uint256 batchSize = 50;
         uint256 total = allGauges.length;
         for (uint256 i = 0; i < total; i += batchSize) {
@@ -753,13 +605,8 @@ contract Deploy is Script {
                     ++j;
                 }
             }
-            bytes memory data = abi.encodeWithSignature("setGauges(uint256[])", batch);
-            (bool ok,) = address(curveGaugeRegistry).call(data);
-            if (ok) {
-                console.log("Registered gauge batch", (i / batchSize) + 1);
-            } else {
-                console.log("FAILED gauge batch", (i / batchSize) + 1);
-            }
+            curveGaugeRegistry.setGauges(batch);
+            console.log("Registered gauge batch", (i / batchSize) + 1);
         }
 
         vm.stopBroadcast();
