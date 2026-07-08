@@ -40,19 +40,18 @@ contract SeedDelegates is Script {
         address[] memory seedUsers = seedJson.readAddressArray(".users");
         address[] memory seedDelegates = seedJson.readAddressArray(".delegates");
 
-        uint256 start = vm.envOr("SEED_START", uint256(0));
         uint256 batchSize = vm.envOr("SEED_BATCH_SIZE", DEFAULT_BATCH_SIZE);
-        uint256 maxBatches = vm.envOr("SEED_BATCHES", type(uint256).max);
         bool completeInitialization = vm.envOr("COMPLETE_INITIALIZATION", false);
 
         require(seedUsers.length == seedDelegates.length, "seed length mismatch");
         require(batchSize != 0, "zero batch size");
-        require(start <= seedUsers.length, "start out of range");
 
         vm.startBroadcast(CONVEX_DEPLOYER);
 
+        // Always cover the full list; Delegation skips users already seeded, so reruns fill gaps.
+        uint256 start;
         uint256 batch;
-        while (start < seedUsers.length && batch < maxBatches) {
+        while (start < seedUsers.length) {
             uint256 end = start + batchSize;
             if (end > seedUsers.length) end = seedUsers.length;
 
@@ -71,13 +70,13 @@ contract SeedDelegates is Script {
         }
 
         if (completeInitialization) {
-            require(start == seedUsers.length, "seeding incomplete");
             core.execute(gaugeDelegation, abi.encodeWithSignature("completeInitialization()"));
             console.log("Completed Gauge Delegation initialization");
         }
 
         vm.stopBroadcast();
 
-        console.log("Next SEED_START", start);
+        console.log("Seeded Gauge Delegation total batches", batch);
+        console.log("Seeded Gauge Delegation total users", start);
     }
 }
