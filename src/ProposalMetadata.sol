@@ -5,6 +5,7 @@ import "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
 contract ProposalMetadata is Ownable2Step {
     struct Metadata {
+        string title;
         string description;
         string referenceUrl;
     }
@@ -15,7 +16,7 @@ contract ProposalMetadata is Ownable2Step {
     mapping(uint256 => Metadata) public metadata;
 
     event OperatorSet(address indexed operator, bool active);
-    event MetadataSet(uint256 indexed proposalId, string description, string referenceUrl);
+    event MetadataSet(uint256 indexed proposalId, string title, string description, string referenceUrl);
 
     /// @notice Creates a new ProposalMetadata contract
     /// @param _name Contract name identifier
@@ -34,14 +35,20 @@ contract ProposalMetadata is Ownable2Step {
 
     /// @notice Sets display metadata for a proposal
     /// @param _proposalId Internal proposal identifier
+    /// @param _title Off-chain proposal title
     /// @param _description Off-chain proposal description
     /// @param _referenceUrl Off-chain proposal reference URL
-    function setMetadata(uint256 _proposalId, string calldata _description, string calldata _referenceUrl) external {
+    function setMetadata(
+        uint256 _proposalId,
+        string calldata _title,
+        string calldata _description,
+        string calldata _referenceUrl
+    ) external {
         require(operators[msg.sender], "Not operator");
 
-        metadata[_proposalId] = Metadata({description: _description, referenceUrl: _referenceUrl});
+        metadata[_proposalId] = Metadata({title: _title, description: _description, referenceUrl: _referenceUrl});
 
-        emit MetadataSet(_proposalId, _description, _referenceUrl);
+        emit MetadataSet(_proposalId, _title, _description, _referenceUrl);
     }
 
     /// @notice Returns the contract version

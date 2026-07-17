@@ -35,9 +35,10 @@ contract ProposalMetadataTest is Test {
         proposalMetadata.setOperator(operator, true);
 
         vm.prank(operator);
-        proposalMetadata.setMetadata(42, "Proposal description", "https://example.com/proposals/42");
+        proposalMetadata.setMetadata(42, "Proposal title", "Proposal description", "https://example.com/proposals/42");
 
-        (string memory description, string memory referenceUrl) = proposalMetadata.metadata(42);
+        (string memory title, string memory description, string memory referenceUrl) = proposalMetadata.metadata(42);
+        assertEq(title, "Proposal title");
         assertEq(description, "Proposal description");
         assertEq(referenceUrl, "https://example.com/proposals/42");
     }
@@ -46,11 +47,14 @@ contract ProposalMetadataTest is Test {
         proposalMetadata.setOperator(operator, true);
 
         vm.startPrank(operator);
-        proposalMetadata.setMetadata(42, "Proposal description", "https://example.com/proposals/42");
-        proposalMetadata.setMetadata(42, "Updated description", "https://example.com/proposals/42-updated");
+        proposalMetadata.setMetadata(42, "Proposal title", "Proposal description", "https://example.com/proposals/42");
+        proposalMetadata.setMetadata(
+            42, "Updated title", "Updated description", "https://example.com/proposals/42-updated"
+        );
         vm.stopPrank();
 
-        (string memory description, string memory referenceUrl) = proposalMetadata.metadata(42);
+        (string memory title, string memory description, string memory referenceUrl) = proposalMetadata.metadata(42);
+        assertEq(title, "Updated title");
         assertEq(description, "Updated description");
         assertEq(referenceUrl, "https://example.com/proposals/42-updated");
     }
@@ -58,6 +62,6 @@ contract ProposalMetadataTest is Test {
     function test_nonOperatorCannotSetMetadata() public {
         vm.prank(notOperator);
         vm.expectRevert("Not operator");
-        proposalMetadata.setMetadata(42, "Proposal description", "https://example.com/proposals/42");
+        proposalMetadata.setMetadata(42, "Proposal title", "Proposal description", "https://example.com/proposals/42");
     }
 }

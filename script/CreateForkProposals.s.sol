@@ -183,6 +183,7 @@ contract CreateForkProposals is Script {
         string memory proposalIdText = vm.toString(proposalId);
         ProposalMetadata(metadata).setMetadata(
             proposalId,
+            string.concat(label, " DAO proposal ", proposalIdText),
             string.concat("This is proposal ", proposalIdText),
             string.concat("https://example.com/proposals/", proposalIdText)
         );
