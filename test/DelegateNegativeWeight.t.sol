@@ -48,6 +48,7 @@ contract VotingActor {
 contract DelegateNegativeWeightTest is Test {
     uint256 constant WD = 1e17;
     uint256 constant WEEK = 7 days;
+    uint256 constant BPS_TO_PLATFORM_WEIGHT = 100;
     address constant CURVE_GAUGE_CONTROLLER = 0x2F50D538606Fa9EDD2B11E2446BEb18C9D5846bB;
 
     IvlCVX vlcvx;
@@ -298,9 +299,9 @@ contract DelegateNegativeWeightTest is Test {
         g[0] = gauges[0];
         g[1] = gauges[1];
         g[2] = gauges[2];
-        w[0] = 5000;
-        w[1] = 3000;
-        w[2] = 2000;
+        w[0] = 5000 * BPS_TO_PLATFORM_WEIGHT;
+        w[1] = 3000 * BPS_TO_PLATFORM_WEIGHT;
+        w[2] = 2000 * BPS_TO_PLATFORM_WEIGHT;
         actorA.gaugeVote(gaugePlatform, actorAddrs[0], g, w);
         _dumpState("After A votes GAUGE", daoPid);
 

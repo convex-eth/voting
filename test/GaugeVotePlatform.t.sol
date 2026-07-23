@@ -32,6 +32,7 @@ contract GaugeVotePlatformTest is Test {
 
     uint256 constant WEEK = 86400 * 7;
     uint256 constant WD = 1e17;
+    uint256 constant BPS_TO_PLATFORM_WEIGHT = 100;
 
     uint256 internal proposalEpoch;
 
@@ -112,7 +113,7 @@ contract GaugeVotePlatformTest is Test {
 
     function _getWeights(uint256 w1) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](1);
-        weights[0] = w1;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -125,8 +126,8 @@ contract GaugeVotePlatformTest is Test {
 
     function _getWeights2(uint256 w1, uint256 w2) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](2);
-        weights[0] = w1;
-        weights[1] = w2;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        weights[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -273,7 +274,7 @@ contract GaugeVotePlatformTest is Test {
 
         (, uint256[] memory w, bool voted,,) = platform.getVote(pid, alice);
         assertTrue(voted);
-        assertEq(w[0], 10000);
+        assertEq(w[0], platform.max_weight());
     }
 
     function test_nonEqualizerCannotVoteDuringOvertime() public {
@@ -751,9 +752,9 @@ contract GaugeVotePlatformTest is Test {
         g[1] = address(gauge2);
         g[2] = address(gauge3);
         uint256[] memory w = new uint256[](3);
-        w[0] = 3333;
-        w[1] = 3333;
-        w[2] = 3334;
+        w[0] = 333_300;
+        w[1] = 333_300;
+        w[2] = 333_400;
         _vote(alice, g, w);
 
         assertEq(platform.getGaugeCount(pid), 3);
@@ -777,9 +778,9 @@ contract GaugeVotePlatformTest is Test {
         g3[1] = address(gauge2);
         g3[2] = address(gauge3);
         uint256[] memory w3 = new uint256[](3);
-        w3[0] = 3333;
-        w3[1] = 3333;
-        w3[2] = 3334;
+        w3[0] = 333_300;
+        w3[1] = 333_300;
+        w3[2] = 333_400;
         _vote(alice, g3, w3);
         assertEq(platform.getGaugeCount(pid), 3);
 

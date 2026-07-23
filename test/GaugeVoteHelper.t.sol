@@ -72,7 +72,7 @@ contract GaugeVoteHelperTest is Test {
         platform.setOperator(operator, true);
 
         singleGauge.push(address(gauge1));
-        fullWeight.push(10000);
+        fullWeight.push(platform.max_weight());
     }
 
     function _lock(address user, uint256 amount) internal {

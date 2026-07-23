@@ -40,6 +40,7 @@ contract FxGaugeExecutorTest is Test {
 
     uint256 constant WEEK = 86400 * 7;
     uint256 constant WD = 1e17;
+    uint256 constant BPS_TO_PLATFORM_WEIGHT = 100;
 
     address constant FX_GAUGE_VOTER = 0xAffe966B27ba3E4Ebb8A0eC124C7b7019CC762f8;
 
@@ -136,7 +137,7 @@ contract FxGaugeExecutorTest is Test {
 
     function _getWeights(uint256 w1) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](1);
-        weights[0] = w1;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -149,8 +150,8 @@ contract FxGaugeExecutorTest is Test {
 
     function _getWeights2(uint256 w1, uint256 w2) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](2);
-        weights[0] = w1;
-        weights[1] = w2;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        weights[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -164,9 +165,9 @@ contract FxGaugeExecutorTest is Test {
 
     function _getWeights3(uint256 w1, uint256 w2, uint256 w3) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](3);
-        weights[0] = w1;
-        weights[1] = w2;
-        weights[2] = w3;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        weights[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
+        weights[2] = w3 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 

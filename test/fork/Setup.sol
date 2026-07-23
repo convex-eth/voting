@@ -23,6 +23,7 @@ interface IResupplyRegistry {
 abstract contract ForkSetup is Test, ForkConstants {
     uint256 internal constant TIME_BUFFER = 1;
     uint256 internal constant WEIGHT_BPS = 10000;
+    uint256 internal constant BPS_TO_PLATFORM_WEIGHT = 100;
 
     string internal mainnetRpcUrl;
 
@@ -345,12 +346,12 @@ abstract contract ForkSetup is Test, ForkConstants {
 
     function weights(uint256 a) internal pure returns (uint256[] memory values) {
         values = new uint256[](1);
-        values[0] = a;
+        values[0] = a * BPS_TO_PLATFORM_WEIGHT;
     }
 
     function weights(uint256 a, uint256 b) internal pure returns (uint256[] memory values) {
         values = new uint256[](2);
-        values[0] = a;
-        values[1] = b;
+        values[0] = a * BPS_TO_PLATFORM_WEIGHT;
+        values[1] = b * BPS_TO_PLATFORM_WEIGHT;
     }
 }

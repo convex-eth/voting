@@ -30,6 +30,7 @@ contract GasProfile is Test {
 
     uint256 constant WEEK = 86400 * 7;
     uint256 constant WD = 1e17;
+    uint256 constant BPS_TO_PLATFORM_WEIGHT = 100;
 
     function setUp() public {
         vm.warp(1700000000);
@@ -105,7 +106,7 @@ contract GasProfile is Test {
 
     function _weights1(uint256 w) internal pure returns (uint256[] memory) {
         uint256[] memory arr = new uint256[](1);
-        arr[0] = w;
+        arr[0] = w * BPS_TO_PLATFORM_WEIGHT;
         return arr;
     }
 
@@ -119,9 +120,9 @@ contract GasProfile is Test {
 
     function _weights3(uint256 w1, uint256 w2, uint256 w3) internal pure returns (uint256[] memory) {
         uint256[] memory arr = new uint256[](3);
-        arr[0] = w1;
-        arr[1] = w2;
-        arr[2] = w3;
+        arr[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        arr[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
+        arr[2] = w3 * BPS_TO_PLATFORM_WEIGHT;
         return arr;
     }
 
@@ -150,8 +151,8 @@ contract GasProfile is Test {
         g[0] = address(gauge1);
         g[1] = address(gauge2);
         uint256[] memory w = new uint256[](2);
-        w[0] = 5000;
-        w[1] = 5000;
+        w[0] = 500_000;
+        w[1] = 500_000;
 
         vm.prank(alice);
         platform.vote(alice, g, w);

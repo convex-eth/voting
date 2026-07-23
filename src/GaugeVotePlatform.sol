@@ -57,7 +57,7 @@ contract GaugeVotePlatform is Ownable2Step {
 
     struct GaugeVote {
         address gauge;
-        uint16 weight;
+        uint32 weight;
     }
 
     struct GaugeTotalEntry {
@@ -71,7 +71,7 @@ contract GaugeVotePlatform is Ownable2Step {
 
     Proposal[] public proposals;
     mapping(uint256 => mapping(address => GaugeVote[])) internal votes;
-    uint256 public constant max_weight = 10000;
+    uint256 public constant max_weight = 1_000_000;
     uint256 public constant MIN_PROPOSAL_DURATION = 1 days;
     uint256 public constant MAX_PROPOSAL_DURATION = 6 days;
     uint256 private constant WEIGHT_DIVISOR = 1e17;
@@ -316,7 +316,7 @@ contract GaugeVotePlatform is Ownable2Step {
         for (uint256 i = 0; i < _weights.length; i++) {
             if (_weights[i] == 0) revert NoWeight();
             if (!gaugeRegistry.isRegisteredGauge(_gauges[i])) revert NotGauge();
-            votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint16(_weights[i])}));
+            votes[proposalId][_account].push(GaugeVote({gauge: _gauges[i], weight: uint32(_weights[i])}));
             totalweight += _weights[i];
         }
         if (totalweight != max_weight) revert MaxWeight();

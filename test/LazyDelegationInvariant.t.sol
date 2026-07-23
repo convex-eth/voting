@@ -425,17 +425,17 @@ contract LazyDelegationHandler is Test {
             weights = new uint256[](2);
             voteGauges[0] = gauges[0];
             voteGauges[1] = gauges[1];
-            weights[0] = 7000;
-            weights[1] = 3000;
+            weights[0] = gaugePlatform.max_weight() * 7000 / 10000;
+            weights[1] = gaugePlatform.max_weight() * 3000 / 10000;
         } else {
             voteGauges = new address[](3);
             weights = new uint256[](3);
             voteGauges[0] = gauges[0];
             voteGauges[1] = gauges[1];
             voteGauges[2] = gauges[2];
-            weights[0] = 5000;
-            weights[1] = 3000;
-            weights[2] = 2000;
+            weights[0] = gaugePlatform.max_weight() * 5000 / 10000;
+            weights[1] = gaugePlatform.max_weight() * 3000 / 10000;
+            weights[2] = gaugePlatform.max_weight() * 2000 / 10000;
         }
     }
 

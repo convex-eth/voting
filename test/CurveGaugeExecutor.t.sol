@@ -32,6 +32,7 @@ contract CurveGaugeExecutorTest is Test {
 
     uint256 constant WEEK = 86400 * 7;
     uint256 constant WD = 1e17;
+    uint256 constant BPS_TO_PLATFORM_WEIGHT = 100;
 
     function setUp() public {
         vm.warp(1700000000);
@@ -117,7 +118,7 @@ contract CurveGaugeExecutorTest is Test {
 
     function _getWeights(uint256 w1) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](1);
-        weights[0] = w1;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -130,8 +131,8 @@ contract CurveGaugeExecutorTest is Test {
 
     function _getWeights2(uint256 w1, uint256 w2) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](2);
-        weights[0] = w1;
-        weights[1] = w2;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        weights[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
@@ -145,9 +146,9 @@ contract CurveGaugeExecutorTest is Test {
 
     function _getWeights3(uint256 w1, uint256 w2, uint256 w3) internal pure returns (uint256[] memory) {
         uint256[] memory weights = new uint256[](3);
-        weights[0] = w1;
-        weights[1] = w2;
-        weights[2] = w3;
+        weights[0] = w1 * BPS_TO_PLATFORM_WEIGHT;
+        weights[1] = w2 * BPS_TO_PLATFORM_WEIGHT;
+        weights[2] = w3 * BPS_TO_PLATFORM_WEIGHT;
         return weights;
     }
 
