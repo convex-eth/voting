@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "chainId": "1",
+  "createdAt": 1785288143266,
+  "meta": {
+    "name": "Convex Voting Downstream Executor Role Hookups",
+    "description": "Connect downstream executor permissions for Curve DAO, Curve gauge, Fx gauge, and Resupply DAO execution paths.",
+    "txBuilderVersion": "1.18.0",
+    "createdFromSafeAddress": "0xa3C5A1e09150B75ff251c1a7815A07182c3de2FB",
+    "createdFromOwnerAddress": ""
+  },
+  "transactions": [
+    {
+      "to": "0x5349ffba494aC3c888ffa16fD438F44B8c67fB07",
+      "value": "0",
+      "data": "0x64354d6500000000000000000000000098f98c2fc9683481c896bd912de74537f36c6ada",
+      "contractMethod": null,
+      "contractInputsValues": null
+    },
+    {
+      "to": "0x5349ffba494aC3c888ffa16fD438F44B8c67fB07",
+      "value": "0",
+      "data": "0x2888fc53000000000000000000000000399382e82d9b6362ccabd1f3c763bee93e80c9e8",
+      "contractMethod": null,
+      "contractInputsValues": null
+    },
+    {
+      "to": "0xCC07e8BA6bc8aeb18C4AE110C3Da9c7Dce4A3e74",
+      "value": "0",
+      "data": "0x558a7297000000000000000000000000d2c4c902d3f6882dd9e8c18218cbd788c7cd48350000000000000000000000000000000000000000000000000000000000000001",
+      "contractMethod": null,
+      "contractInputsValues": null
+    },
+    {
+      "to": "0xAffe966B27ba3E4Ebb8A0eC124C7b7019CC762f8",
+      "value": "0",
+      "data": "0xc42069ec000000000000000000000000cc07e8ba6bc8aeb18c4ae110c3da9c7dce4a3e74",
+      "contractMethod": null,
+      "contractInputsValues": null
+    },
+    {
+      "to": "0xCC07e8BA6bc8aeb18C4AE110C3Da9c7Dce4A3e74",
+      "value": "0",
+      "data": "0x1cff79cd000000000000000000000000affe966b27ba3e4ebb8a0ec124c7b7019cc762f80000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000499f4a38900000000000000000000000000000000000000000000000000000000",
+      "contractMethod": null,
+      "contractInputsValues": null
+    },
+    {
+      "to": "0xCCCCCccc94bFeCDd365b4Ee6B86108fC91848901",
+      "value": "0",
+      "data": "0xb3ab15fb000000000000000000000000eac960e8bb7f24bcd566d148d9ac1dad66e07950",
+      "contractMethod": null,
+      "contractInputsValues": null
+    }
+  ]
+}
